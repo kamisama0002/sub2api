@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -275,6 +276,10 @@ func MapModel(model string) string {
 		return "claude-opus-5"
 	case "claude-sonnet-5", "claude-sonnet-5-thinking":
 		return "claude-sonnet-5"
+	case "claude-fable-5-1", "claude-fable-5-1-thinking":
+		return "claude-fable-5.1"
+	case "claude-fable-5", "claude-fable-5-thinking":
+		return "claude-fable-5"
 	case "claude-sonnet-4-6", "claude-sonnet-4-6-thinking", "claude-sonnet-4.6":
 		return "claude-sonnet-4.6"
 	case "claude-opus-4-5-20251101", "claude-opus-4-5-20251101-thinking", "claude-opus-4.5":
@@ -572,6 +577,7 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 	streamingToolInvalid := make(map[string]bool)
 	currentStreamingToolID := ""
 	toolBlockEmitted := false
+	visibleTextEmitted := false
 	pendingAssistantText := ""
 	lastContentFragment := ""
 	pendingLeadingWhitespace := ""
@@ -857,6 +863,7 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 			}
 		}
 		_, _ = outputTextBuf.WriteString(text)
+		visibleTextEmitted = true
 		return writeEvent("content_block_delta", map[string]any{
 			"type":  "content_block_delta",
 			"index": contentBlockIndex,
@@ -1299,6 +1306,14 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 	}
 	if err := closeThinking(); err != nil {
 		return nil, err
+	}
+	// A successful Anthropic turn cannot end with only a thinking block.
+	// Kiro occasionally closes an upstream EventStream after reasoning without
+	// emitting assistant text or a tool call. Treat that as an interrupted stream
+	// instead of fabricating stop_reason=end_turn, which downstream clients report
+	// as ACP_EMPTY_TURN / "This request produced no visible reply".
+	if thinkingBlockIndex >= 0 && !visibleTextEmitted && !toolBlockEmitted {
+		return nil, errors.New("kiro stream ended after thinking without visible output")
 	}
 	if usage.OutputTokens == 0 {
 		if est := anthropictokenizer.CountTokens(outputTextBuf.String()); est > 0 {

@@ -725,47 +725,109 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		return resultWithUsage(), nil
 	}
 
-	// Read Anthropic SSE events
-	for scanner.Scan() {
-		line := scanner.Text()
-		eventType, ok := parseAnthropicSSEField(line, "event")
-		if !ok {
-			continue
+	// Read Anthropic SSE events in a goroutine so the downstream connection can
+	// receive SSE comment keepalives while Kiro is waiting for the next token.
+	// Codex Desktop aborts an otherwise healthy stream after roughly 60 seconds
+	// of silence; nginx then records that client-side abort as HTTP 499.
+	type responsesScanEvent struct {
+		line string
+		err  error
+	}
+	scanEvents := make(chan responsesScanEvent, 16)
+	scanDone := make(chan struct{})
+	defer close(scanDone)
+	go func() {
+		defer close(scanEvents)
+		send := func(ev responsesScanEvent) bool {
+			select {
+			case scanEvents <- ev:
+				return true
+			case <-scanDone:
+				return false
+			}
 		}
+		for scanner.Scan() {
+			if !send(responsesScanEvent{line: scanner.Text()}) {
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			_ = send(responsesScanEvent{err: err})
+		}
+	}()
 
-		// Read data line
-		if !scanner.Scan() {
-			break
-		}
-		dataLine := scanner.Text()
-		payload, ok := parseAnthropicSSEField(dataLine, "data")
-		if !ok {
-			continue
-		}
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			logger.L().Warn("forward_as_responses stream: failed to parse event",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-				zap.String("event_type", eventType),
-			)
-			continue
-		}
-
-		mergeKiroCreditsFromAnthropicPayload(&usage, payload)
-
-		if processEvent(&event) {
-			return resultWithUsage(), nil
-		}
+	keepaliveInterval := time.Duration(0)
+	if s.cfg != nil && s.cfg.Gateway.StreamKeepaliveInterval > 0 {
+		keepaliveInterval = time.Duration(s.cfg.Gateway.StreamKeepaliveInterval) * time.Second
+	}
+	var keepaliveTicker *time.Ticker
+	if keepaliveInterval > 0 {
+		keepaliveTicker = time.NewTicker(keepaliveInterval)
+		defer keepaliveTicker.Stop()
+	}
+	var keepaliveCh <-chan time.Time
+	if keepaliveTicker != nil {
+		keepaliveCh = keepaliveTicker.C
 	}
 
-	if err := scanner.Err(); err != nil {
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("forward_as_responses stream: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
+	pendingEventType := ""
+	for {
+		select {
+		case <-keepaliveCh:
+			if _, err := fmt.Fprint(c.Writer, ":\n\n"); err != nil {
+				logger.L().Info("forward_as_responses stream: client disconnected during keepalive",
+					zap.String("request_id", requestID),
+				)
+				return resultWithUsage(), nil
+			}
+			c.Writer.Flush()
+		case item, ok := <-scanEvents:
+			if !ok {
+				return finalizeStream()
+			}
+			if item.err != nil {
+				if !errors.Is(item.err, context.Canceled) && !errors.Is(item.err, context.DeadlineExceeded) {
+					logger.L().Warn("forward_as_responses stream: read error",
+						zap.Error(item.err),
+						zap.String("request_id", requestID),
+					)
+				}
+				return finalizeStream()
+			}
+
+			if pendingEventType == "" {
+				eventType, parsed := parseAnthropicSSEField(item.line, "event")
+				if parsed {
+					pendingEventType = eventType
+				}
+				continue
+			}
+
+			payload, parsed := parseAnthropicSSEField(item.line, "data")
+			if !parsed {
+				// Be tolerant of comments/blank lines and a replacement event line.
+				if eventType, eventParsed := parseAnthropicSSEField(item.line, "event"); eventParsed {
+					pendingEventType = eventType
+				}
+				continue
+			}
+			eventType := pendingEventType
+			pendingEventType = ""
+
+			var event apicompat.AnthropicStreamEvent
+			if err := json.Unmarshal([]byte(payload), &event); err != nil {
+				logger.L().Warn("forward_as_responses stream: failed to parse event",
+					zap.Error(err),
+					zap.String("request_id", requestID),
+					zap.String("event_type", eventType),
+				)
+				continue
+			}
+
+			mergeKiroCreditsFromAnthropicPayload(&usage, payload)
+			if processEvent(&event) {
+				return resultWithUsage(), nil
+			}
 		}
 	}
 

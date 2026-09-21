@@ -1885,7 +1885,7 @@ func TestStreamEventStreamAsAnthropicDoesNotCreateHalfWordFromKiroDelta(t *testi
 	require.Contains(t, output, `"text":"'m starting"`)
 }
 
-func TestStreamEventStreamAsAnthropicThinkingOnlyResponse(t *testing.T) {
+func TestStreamEventStreamAsAnthropicThinkingOnlyResponseReturnsError(t *testing.T) {
 	stream := bytes.NewBuffer(nil)
 	_, _ = stream.Write(buildEventStreamFrame(t, "reasoningContentEvent", map[string]any{
 		"reasoningContentEvent": map[string]any{
@@ -1895,16 +1895,16 @@ func TestStreamEventStreamAsAnthropicThinkingOnlyResponse(t *testing.T) {
 
 	var out bytes.Buffer
 	result, err := StreamEventStreamAsAnthropicWithContext(context.Background(), stream, &out, "claude-sonnet-4-5", 9, KiroRequestContext{ThinkingEnabled: true})
-	require.NoError(t, err)
-	// thinking-only 不再被误判为 max_tokens,按协议自然兜底为 end_turn
-	require.Equal(t, "end_turn", result.StopReason)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), "thinking without visible output")
 
 	output := out.String()
 	require.Contains(t, output, `"type":"thinking"`)
 	require.Contains(t, output, `"type":"thinking_delta"`)
 	require.Contains(t, output, `"thinking":"I should think first."`)
-	require.Contains(t, output, `event: message_delta`)
-	require.Contains(t, output, `event: message_stop`)
+	require.NotContains(t, output, `event: message_delta`)
+	require.NotContains(t, output, `event: message_stop`)
 }
 
 func TestStreamEventStreamAsAnthropicParsesMultipleReasoningEventsWhenEnabled(t *testing.T) {
