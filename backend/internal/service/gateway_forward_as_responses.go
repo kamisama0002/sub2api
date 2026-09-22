@@ -787,10 +787,20 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			}
 			if item.err != nil {
 				if !errors.Is(item.err, context.Canceled) && !errors.Is(item.err, context.DeadlineExceeded) {
-					logger.L().Warn("forward_as_responses stream: read error",
+					logger.L().Error("forward_as_responses stream: read error",
 						zap.Error(item.err),
 						zap.String("request_id", requestID),
 					)
+					// The upstream stream broke mid-flight. Emit a terminal SSE error event so
+					// clients see an explicit failure instead of a truncated-but-valid response.
+					if errPayload, mErr := json.Marshal(map[string]any{
+						"type":    "error",
+						"code":    "server_error",
+						"message": fmt.Sprintf("upstream stream interrupted: %v", item.err),
+					}); mErr == nil {
+						fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errPayload) //nolint:errcheck
+						c.Writer.Flush()
+					}
 				}
 				return finalizeStream()
 			}
