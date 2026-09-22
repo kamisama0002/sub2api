@@ -504,10 +504,22 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 
 	if err := scanner.Err(); err != nil {
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("forward_as_cc stream: read error",
+			logger.L().Error("forward_as_cc stream: read error",
 				zap.Error(err),
 				zap.String("request_id", requestID),
 			)
+			// The upstream stream broke mid-flight. Emit a terminal SSE error chunk so
+			// clients see an explicit failure instead of a clean [DONE] with no content.
+			errChunk := map[string]interface{}{
+				"error": map[string]string{
+					"type":    "server_error",
+					"message": fmt.Sprintf("upstream stream interrupted: %v", err),
+				},
+			}
+			if b, e := json.Marshal(errChunk); e == nil {
+				fmt.Fprintf(c.Writer, "data: %s\n\n", b)
+				c.Writer.Flush()
+			}
 		}
 	}
 
