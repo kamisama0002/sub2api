@@ -52,10 +52,12 @@ func ProvideAdminHandlers(
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	settingService *service.SettingService,
+	opencodeGoUsage *service.OpenCodeGoUsageService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
 	accountHandler.SetCodexTicketSettings(settingService)
+	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,

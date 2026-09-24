@@ -72,13 +72,13 @@ Direct Firefly calls use **Firefly Web** (`firefly.adobe.com` / `clio-playground
 | `gpt-image-1.5` | Firefly GPT Image 1.5 |
 | `gpt-image-2.5-flare` | Firefly GPT Image 2.5 Flare |
 | `gpt-image-2.5-sunburst` | Firefly GPT Image 2.5 Sunburst (upstream version name is `prism`) |
-| `gemini-2.5-flash-image` / `gemini-3-pro-image` / `gemini-3.1-flash-image` | Gemini image models on Firefly (same public names as the Gemini channel) |
+| `gemini-2.5-flash-image` / `gemini-3-pro-image` / `gemini-3.1-flash-image` (each also as `*-preview`) | Gemini image models on Firefly (same public names as the Gemini channel) |
 | `flux-pro`, `flux-ultra` | Firefly FLUX |
 | `imagen-4`, `imagen-4-fast` | Firefly Imagen 4 |
 | `gpt-4o-image` | Firefly GPT-4o Image |
 | `runway-gen4-image` | Firefly Runway Gen-4 Image |
 
-Legacy aliases `gpt-image`, `gpt-image-1`, and `gpt-image-1-mini` map to `gpt-image-2` but are not listed by `/v1/models`. Preview names `gemini-2.5-flash-image-preview`, `gemini-3-pro-image-preview`, and `gemini-3.1-flash-image-preview` are also accepted and map to the same model as their non-preview name, but are not listed by `/v1/models` either.
+Legacy aliases `gpt-image`, `gpt-image-1`, and `gpt-image-1-mini` map to `gpt-image-2` but are not listed by `/v1/models`. Each `gemini-*-image` name is also served under its `-preview` spelling, which maps to the same Firefly model and is listed by `/v1/models` as well.
 
 `gpt-image-*` names are shared with official OpenAI image models. They reach Firefly only when the API key is bound to an **Adobe** group; an OpenAI group still talks to OpenAI. Composite groups do **not** auto-detect `gpt-image-*` (the name is ambiguous) — add an explicit composite route. `gemini-*-image` / `gemini-3-pro-image*` are also shared with the Gemini channel, so composite groups decide by endpoint: `/v1/images/*` goes to Adobe, chat-style endpoints (chat completions, responses, messages) go to Gemini, and `/v1beta` goes to whichever platform in the group can serve the name — if both Gemini/Antigravity and Adobe accounts can, it defaults to Gemini unless an explicit route says otherwise. `flux-*`, `imagen-*`, `runway-gen4*`, and `gpt-4o-image` can be auto-detected as Adobe.
 
@@ -700,7 +700,10 @@ go generate ./cmd/server
 Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
 
 - Enable: Set environment variable `RUN_MODE=simple`
+- Default groups are seeded on each startup. Set `SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS=false` (or YAML `simple_mode.auto_create_default_groups: false`) to manage groups yourself. The default is `true`; disabling it does not delete existing groups or change runtime auto-binding or admin concurrency setup.
 - Difference: Hides SaaS-related features and skips billing process
+- Optional key windows: Set `SIMPLE_MODE_KEY_RATE_LIMIT_ENABLED=true` to enforce each API key's configured 5-hour, daily, and 7-day spending windows. The default is `false`; balance and subscription debit remain bypassed when enabled.
+- Window enforcement uses the database as its source of truth and records only API-key window usage. It is a post-request soft cap, so concurrent in-flight requests can overshoot by their final costs. Historical simple-mode usage is not backfilled.
 - Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
 
 ---

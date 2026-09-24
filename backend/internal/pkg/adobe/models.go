@@ -58,8 +58,12 @@ func ImageModelIDs() []string {
 		// gpt-image 系
 		"gpt-image-2", "gpt-image-1.5",
 		"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", // sunburst 是 UI 名，上游 modelVersion=prism
-		// Google Gemini 生图（与 Gemini 渠道对外名对齐；nano-banana* 是历史别名，不列）
-		"gemini-3-pro-image", "gemini-2.5-flash-image", "gemini-3.1-flash-image",
+		// Google Gemini 生图（与 Gemini 渠道对外名对齐；nano-banana* 是历史别名，不列）。
+		// preview 名与非 preview 名落同一个 Firefly 族，Gemini 渠道也同时暴露两者，
+		// 客户端常年写死 -preview，所以一并列出。
+		"gemini-3-pro-image", "gemini-3-pro-image-preview",
+		"gemini-2.5-flash-image", "gemini-2.5-flash-image-preview",
+		"gemini-3.1-flash-image", "gemini-3.1-flash-image-preview",
 		// Black Forest Labs FLUX
 		"flux-pro", "flux-ultra",
 		// Google Imagen 4

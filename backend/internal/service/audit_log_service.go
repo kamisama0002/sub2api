@@ -88,6 +88,18 @@ func (s *AuditLogService) Record(entry *AuditLog) {
 }
 
 // List 分页查询审计日志。
+// RecordRequired persists a sensitive disclosure before releasing its secret.
+// A failed audit write must not silently turn into an unaudited disclosure.
+func (s *AuditLogService) RecordRequired(ctx context.Context, entry *AuditLog) error {
+	if s == nil || s.repo == nil {
+		return fmt.Errorf("audit storage unavailable")
+	}
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now().UTC()
+	}
+	return s.repo.Insert(ctx, entry)
+}
+
 func (s *AuditLogService) List(ctx context.Context, filter *AuditLogFilter) (*AuditLogList, error) {
 	return s.repo.List(ctx, filter)
 }

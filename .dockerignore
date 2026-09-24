@@ -73,6 +73,13 @@ deploy/sub2api-sudoers
 deploy/data/
 deploy/postgres_data/
 deploy/redis_data/
+deploy/online/data/
+deploy/online/postgres_data/
+deploy/online/redis_data/
+deploy/online/*.tar.gz
+**/.env
+**/.env.*
+!**/.env.example
 
 # GoReleaser
 .goreleaser.yaml

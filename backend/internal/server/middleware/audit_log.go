@@ -52,7 +52,8 @@ func SkipAudit(c *gin.Context) {
 // scalar, non-secret operation summaries. Request bodies and arbitrary maps
 // are never accepted through this channel.
 var auditExtraAllowedKeys = map[string]struct{}{
-	"result": {}, "error_code": {}, "enabled": {}, "blocking_enabled": {},
+	"target_user_id": {},
+	"result":         {}, "error_code": {}, "enabled": {}, "blocking_enabled": {},
 	"config_version": {}, "endpoint_count": {}, "scanner_count": {},
 	"all_groups": {}, "group_count": {}, "guard_endpoint_id": {},
 	"http_status": {}, "latency_ms": {}, "token_applied": {}, "retryable": {},
@@ -109,6 +110,7 @@ func truncateAuditExtraString(value string, limit int) string {
 
 // auditSensitiveReads 需要审计的敏感 GET 读取（method+FullPath → 动作名）。
 var auditSensitiveReads = map[string]string{
+	"GET /api/v1/admin/api-keys":                  "admin.api_keys.list",
 	"GET /api/v1/admin/accounts/data":             "admin.accounts.export",
 	"GET /api/v1/admin/proxies/data":              "admin.proxies.export",
 	"GET /api/v1/admin/redeem-codes/export":       "admin.redeem_codes.export",

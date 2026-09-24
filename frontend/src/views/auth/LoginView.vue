@@ -12,10 +12,10 @@
       </div>
       <!-- Login Form -->
       <form @submit.prevent="handleLogin" class="space-y-5">
-        <!-- Email Input -->
+        <!-- Account or email input -->
         <div>
           <label for="email" class="input-label">
-            {{ t('auth.emailLabel') }}
+            {{ t('auth.loginAccountLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
@@ -24,14 +24,16 @@
             <input
               id="email"
               v-model="formData.email"
-              type="email"
+              type="text"
               required
               autofocus
-              autocomplete="email"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
               :disabled="authActionDisabled"
               class="input pl-11"
               :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.emailPlaceholder')"
+              :placeholder="t('auth.loginAccountPlaceholder')"
             />
           </div>
         </div>
@@ -251,6 +253,7 @@ import type {
 } from '@/types'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
+import { resolveLoginEmail } from '@/utils/loginAccount'
 
 const { t } = useI18n()
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
@@ -531,12 +534,12 @@ function validateForm(): boolean {
     return false
   }
 
-  // Email validation
+  // Short accounts resolve to the deployment's internal email domain.
   if (!formData.email.trim()) {
-    errors.email = t('auth.emailRequired')
+    errors.email = t('auth.loginAccountRequired')
     isValid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-    errors.email = t('auth.invalidEmail')
+  } else if (!resolveLoginEmail(formData.email)) {
+    errors.email = t('auth.invalidLoginAccount')
     isValid = false
   }
 
@@ -578,7 +581,7 @@ async function handleLogin(): Promise<void> {
   try {
     // Call auth store login（阿里云 captchaVerifyParam 复用 turnstile_token 字段）
     const response = await authStore.login({
-      email: formData.email,
+      email: resolveLoginEmail(formData.email)!,
       password: formData.password,
       turnstile_token:
         turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,

@@ -439,6 +439,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/api-keys',
+    name: 'AdminApiKeys',
+    component: () => import('@/views/admin/ApiKeysView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'All API Keys', titleKey: 'adminKeys.title', descriptionKey: 'adminKeys.hint' }
+  },
+  {
     path: '/admin/users',
     name: 'AdminUsers',
     component: () => import('@/views/admin/UsersView.vue'),

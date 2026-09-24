@@ -72,13 +72,13 @@ Sub2API 支持通过 Adobe Firefly Web 订阅账号（浏览器 Cookie）直连�
 | `gpt-image-1.5` | Firefly GPT Image 1.5 |
 | `gpt-image-2.5-flare` | Firefly GPT Image 2.5 Flare |
 | `gpt-image-2.5-sunburst` | Firefly GPT Image 2.5 Sunburst（上游版本名为 prism） |
-| `gemini-2.5-flash-image` / `gemini-3-pro-image` / `gemini-3.1-flash-image` | Firefly 上的 Gemini 生图（与 Gemini 渠道同名） |
+| `gemini-2.5-flash-image` / `gemini-3-pro-image` / `gemini-3.1-flash-image`（每个也有 `*-preview` 名）| Firefly 上的 Gemini 生图（与 Gemini 渠道同名） |
 | `flux-pro` / `flux-ultra` | Firefly FLUX |
 | `imagen-4` / `imagen-4-fast` | Firefly Imagen 4 |
 | `gpt-4o-image` | Firefly GPT-4o Image |
 | `runway-gen4-image` | Firefly Runway Gen-4 Image |
 
-历史别名 `gpt-image`、`gpt-image-1`、`gpt-image-1-mini` 会落到 `gpt-image-2`，但不会出现在 `/v1/models` 列表中。预览名 `gemini-2.5-flash-image-preview`、`gemini-3-pro-image-preview`、`gemini-3.1-flash-image-preview` 同样可以请求，落到对应的非 preview 模型，也不出现在 `/v1/models`。
+历史别名 `gpt-image`、`gpt-image-1`、`gpt-image-1-mini` 会落到 `gpt-image-2`，但不会出现在 `/v1/models` 列表中。每个 `gemini-*-image` 都同时提供 `-preview` 名，落到同一个 Firefly 模型，也会出现在 `/v1/models` 里。
 
 `gpt-image-*` 与 OpenAI 官方出图同名。只有 API Key 绑定 **Adobe 分组** 时才会走 Firefly；绑到 OpenAI 分组则仍走 OpenAI。合成分组（composite）**不会**根据 `gpt-image-*` 自动判断平台（名称有歧义），需要单独配置路由。`gemini-*-image` / `gemini-3-pro-image*` 同样与 Gemini 渠道同名，合成分组按入口决定：`/v1/images/*` 走 Adobe；chat 类入口（chat completions、responses、messages）走 Gemini；`/v1beta` 看分组里哪个平台的号能服务该名字，Gemini/Antigravity 与 Adobe 都能服务时默认走 Gemini，可用显式路由改走 Adobe。`flux-*`、`imagen-*`、`runway-gen4*`、`gpt-4o-image` 可由合成分组自动识别为 Adobe。
 
@@ -708,7 +708,10 @@ OAuth / Setup Token 图片请求使用 Responses 主控模型调用 `image_gener
 简易模式适合个人开发者或内部团队快速使用，不依赖完整 SaaS 功能。
 
 - 启用方式：设置环境变量 `RUN_MODE=simple`
+- 默认每次启动会补齐默认分组。设置 `SIMPLE_MODE_AUTO_CREATE_DEFAULT_GROUPS=false`（或 YAML `simple_mode.auto_create_default_groups: false`）可自行管理分组。默认值为 `true`；关闭后不删除已有分组，不改变运行时自动绑定或管理员并发设置。
 - 功能差异：隐藏 SaaS 相关功能，跳过计费流程
+- 可选密钥窗口：设置 `SIMPLE_MODE_KEY_RATE_LIMIT_ENABLED=true` 后，按每个 API Key 配置的 5 小时、1 天、7 天消费窗口进行限制，默认值为 `false`；启用后仍跳过余额和订阅扣费。
+- 窗口限制以数据库为准，只记录 API Key 窗口用量。它在请求完成后记账，并发中的请求可能以各自最终费用超过窗口上限。启用前的历史用量不会自动补算。
 - 安全注意事项：生产环境需同时设置 `SIMPLE_MODE_CONFIRM=true` 才允许启动
 
 ---

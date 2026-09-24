@@ -429,7 +429,13 @@ func DisplayLabel(externalID string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return strings.TrimPrefix(spec.label, "Firefly "), true
+	label := strings.TrimPrefix(spec.label, "Firefly ")
+	// preview 名与非 preview 名共用一个族，标签不加区分的话选择器里会出现
+	// 两行一模一样的「Gemini 3 Pro Image」。
+	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(externalID)), "-preview") {
+		label += " Preview"
+	}
+	return label, true
 }
 
 // normalizeImageModelID 把对外模型名翻译成内部族 id。

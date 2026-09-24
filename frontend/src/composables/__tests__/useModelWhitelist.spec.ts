@@ -23,6 +23,8 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.6')
     expect(models).toContain('gpt-6')
     expect(models).toContain('gpt-6-astra')
+    expect(models).toContain('gpt-6-sol')
+    expect(models).toContain('gpt-6-luna')
   })
 
   it('openai 预设映射包含 GPT-6 别名和 Astra', () => {
@@ -56,6 +58,8 @@ describe('useModelWhitelist', () => {
     expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5-1')
     expect(getModelsByPlatform('claude')).toContain('claude-fable-5')
     expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5')
+    expect(getModelsByPlatform('claude')).toContain('claude-opus-5-5')
+    expect(getModelsByPlatform('antigravity')).not.toContain('claude-opus-5-5')
     expect(getModelsByPlatform('claude')).toContain('claude-opus-4-8')
     expect(getModelsByPlatform('antigravity')).toContain('claude-opus-4-8')
   })
@@ -359,6 +363,15 @@ describe('useModelWhitelist', () => {
     for (const externalID of getModelsByPlatform('adobe')) {
       expect(froms.has(externalID)).toBe(true)
       expect(externalID.startsWith('firefly-')).toBe(false)  // 干净外部名，不带前缀
+    }
+  })
+
+  // preview 名也在后端默认映射里，白名单同步漏掉它们会让勾了白名单的账号拒掉这些请求。
+  it('adobe 同步列表包含 gemini 生图的 preview 名', () => {
+    const models = getModelsByPlatform('adobe')
+
+    for (const id of ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image-preview', 'gemini-3.1-flash-image-preview']) {
+      expect(models).toContain(id)
     }
   })
 

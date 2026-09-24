@@ -477,19 +477,22 @@ func TestNearestSizeFallbacks(t *testing.T) {
 // 否则账号一旦配了自定义 model_mapping，13 个对外名一个都解析不了。
 func TestResolveImageAcceptsExternalModelNames(t *testing.T) {
 	wantFamily := map[string]string{
-		"gpt-image-2":            "firefly-gpt-image-2",
-		"gpt-image-1.5":          "firefly-gpt-image-1.5",
-		"gpt-image-2.5-flare":    "firefly-gpt-image-2-5-flare",
-		"gpt-image-2.5-sunburst": "firefly-gpt-image-2-5-prism",
-		"gemini-3-pro-image":     "firefly-nano-banana-pro",
-		"gemini-2.5-flash-image": "firefly-nano-banana",
-		"gemini-3.1-flash-image": "firefly-nano-banana2",
-		"flux-pro":               "firefly-flux-pro",
-		"flux-ultra":             "firefly-flux-ultra",
-		"imagen-4":               "firefly-imagen-4",
-		"imagen-4-fast":          "firefly-imagen-4-fast",
-		"gpt-4o-image":           "firefly-gpt-4o-image",
-		"runway-gen4-image":      "firefly-runway-gen4-image",
+		"gpt-image-2":                    "firefly-gpt-image-2",
+		"gpt-image-1.5":                  "firefly-gpt-image-1.5",
+		"gpt-image-2.5-flare":            "firefly-gpt-image-2-5-flare",
+		"gpt-image-2.5-sunburst":         "firefly-gpt-image-2-5-prism",
+		"gemini-3-pro-image":             "firefly-nano-banana-pro",
+		"gemini-3-pro-image-preview":     "firefly-nano-banana-pro",
+		"gemini-2.5-flash-image":         "firefly-nano-banana",
+		"gemini-2.5-flash-image-preview": "firefly-nano-banana",
+		"gemini-3.1-flash-image":         "firefly-nano-banana2",
+		"gemini-3.1-flash-image-preview": "firefly-nano-banana2",
+		"flux-pro":                       "firefly-flux-pro",
+		"flux-ultra":                     "firefly-flux-ultra",
+		"imagen-4":                       "firefly-imagen-4",
+		"imagen-4-fast":                  "firefly-imagen-4-fast",
+		"gpt-4o-image":                   "firefly-gpt-4o-image",
+		"runway-gen4-image":              "firefly-runway-gen4-image",
 	}
 
 	// 对外清单里的每一个名字都必须可解析——这就是用户在白名单选择器里能勾到的全集。
@@ -505,12 +508,9 @@ func TestResolveImageAcceptsExternalModelNames(t *testing.T) {
 
 func TestResolveImageAcceptsLegacyNanoBananaAliases(t *testing.T) {
 	for requested, wantFamily := range map[string]string{
-		"nano-banana":                    "firefly-nano-banana",
-		"nano-banana-pro":                "firefly-nano-banana-pro",
-		"nano-banana2":                   "firefly-nano-banana2",
-		"gemini-2.5-flash-image-preview": "firefly-nano-banana",
-		"gemini-3-pro-image-preview":     "firefly-nano-banana-pro",
-		"gemini-3.1-flash-image-preview": "firefly-nano-banana2",
+		"nano-banana":     "firefly-nano-banana",
+		"nano-banana-pro": "firefly-nano-banana-pro",
+		"nano-banana2":    "firefly-nano-banana2",
 	} {
 		conf, err := ResolveImage(ImageRequest{ModelID: requested, Size: "1024x1024"})
 		require.NoError(t, err, requested)
@@ -648,4 +648,19 @@ func TestDisplayLabel(t *testing.T) {
 	require.False(t, ok)
 	_, ok = DisplayLabel("firefly-imagen-4")
 	require.False(t, ok, "内部族 id 不是对外名")
+}
+
+// preview 名与非 preview 名同族，展示名必须分得开，否则选择器里会出现两行同名。
+func TestDisplayLabelDistinguishesPreviewNames(t *testing.T) {
+	for base, preview := range map[string]string{
+		"gemini-3-pro-image":     "gemini-3-pro-image-preview",
+		"gemini-2.5-flash-image": "gemini-2.5-flash-image-preview",
+		"gemini-3.1-flash-image": "gemini-3.1-flash-image-preview",
+	} {
+		baseLabel, ok := DisplayLabel(base)
+		require.True(t, ok, base)
+		previewLabel, ok := DisplayLabel(preview)
+		require.True(t, ok, preview)
+		require.Equal(t, baseLabel+" Preview", previewLabel)
+	}
 }

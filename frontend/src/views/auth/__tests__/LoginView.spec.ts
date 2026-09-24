@@ -2,9 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import LoginView from '@/views/auth/LoginView.vue'
 
-const { getPublicSettingsMock, pushMock } = vi.hoisted(() => ({
+const { getPublicSettingsMock, pushMock, loginMock } = vi.hoisted(() => ({
   getPublicSettingsMock: vi.fn(),
-  pushMock: vi.fn()
+  pushMock: vi.fn(),
+  loginMock: vi.fn()
 }))
 
 const publicSettings = {
@@ -50,7 +51,7 @@ vi.mock('vue-i18n', () => ({
 
 vi.mock('@/stores', () => ({
   useAuthStore: () => ({
-    login: vi.fn(),
+    login: loginMock,
     loginWithPasskey: vi.fn(),
     login2FA: vi.fn()
   }),
@@ -94,6 +95,8 @@ describe('LoginView registration entry', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
     pushMock.mockReset()
+    loginMock.mockReset()
+    loginMock.mockResolvedValue({})
     getPublicSettingsMock.mockResolvedValue(publicSettings)
   })
 
@@ -114,5 +117,41 @@ describe('LoginView registration entry', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('auth.signUp')
+  })
+
+  it.each(['pink', 'tjt740', 'fantuantuan'])('logs in with short account %s', async (account) => {
+    const wrapper = mountLogin()
+    await flushPromises()
+    const input = wrapper.get('#email')
+    expect(input.attributes('type')).toBe('text')
+    expect(input.attributes('autocomplete')).toBe('username')
+    await input.setValue(` ${account} `)
+    await wrapper.get('#password').setValue('test-password')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(loginMock).toHaveBeenCalledWith(expect.objectContaining({
+      email: `${account}@sub2api.local`, password: 'test-password'
+    }))
+    expect(pushMock).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('preserves full email login', async () => {
+    const wrapper = mountLogin()
+    await flushPromises()
+    await wrapper.get('#email').setValue(' user@example.com ')
+    await wrapper.get('#password').setValue('test-password')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(loginMock).toHaveBeenCalledWith(expect.objectContaining({ email: 'user@example.com' }))
+  })
+
+  it.each(['pink space', 'pink@', 'pink@sub2api', '@sub2api.local'])('rejects invalid account %s', async (account) => {
+    const wrapper = mountLogin()
+    await flushPromises()
+    await wrapper.get('#email').setValue(account)
+    await wrapper.get('#password').setValue('test-password')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(loginMock).not.toHaveBeenCalled()
   })
 })

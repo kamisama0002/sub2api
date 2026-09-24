@@ -31,6 +31,16 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		c.JSON(http.StatusOK, gin.H{"input_tokens": inputTokens})
 		return nil
 	}
+	validationModel := parsed.Model
+	if account != nil && account.Type == AccountTypeAPIKey {
+		validationModel = account.GetMappedModel(validationModel)
+	}
+	if account != nil && account.Platform == PlatformAnthropic && !account.IsBedrock() && account.Type != AccountTypeServiceAccount {
+		if err := validateClaudeOpus55Request(parsed.Body.Bytes(), validationModel); err != nil {
+			s.countTokensError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+			return err
+		}
+	}
 
 	if account != nil && account.IsAnthropicAPIKeyPassthroughEnabled() {
 		passthroughBody := parsed.Body.Bytes()
@@ -507,7 +517,10 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if ctEnableFP {
 		billingFingerprint = ctFingerprint
 	}
-	if billingUA := effectiveBillingUserAgent(tokenType, mimicClaudeCode, billingFingerprint); billingUA != "" {
+	// 一致性铁律：同一次请求内只取一次 mimic UA，billing cc_version 与出站
+	// User-Agent 头共用这一个字符串（同 buildUpstreamRequest）。
+	ctMimicUserAgent := claude.DefaultUserAgent()
+	if billingUA := effectiveBillingUserAgent(ctMimicUserAgent, tokenType, mimicClaudeCode, billingFingerprint); billingUA != "" {
 		body = syncBillingHeaderVersion(body, billingUA)
 	}
 
@@ -573,7 +586,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth + mimic Claude Code：强制注入 CLI 指纹 header
 	if tokenType == "oauth" && mimicClaudeCode {
-		applyClaudeCodeMimicHeaders(req, false)
+		applyClaudeCodeMimicHeaders(req, false, ctMimicUserAgent)
 	}
 
 	// 写入最终 anthropic-beta header（Del 一次避免白名单透传值残留）
