@@ -1541,7 +1541,7 @@
       </div>
 
       <div
-        v-if="form.platform === 'kiro' && (accountCategory === 'apikey' || accountCategory === 'apikey-relay')"
+        v-if="(form.platform === 'kiro' && (accountCategory === 'apikey' || accountCategory === 'apikey-relay')) || (form.platform === 'adobe' && accountCategory === 'apikey-relay')"
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
@@ -1701,56 +1701,95 @@
         </div>
       </div>
 
-      <!-- Kiro 只支持模型映射模式，不支持白名单模式 -->
       <div v-if="form.platform === 'kiro'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
-        <div>
+        <div class="mb-4 flex gap-2">
+          <button
+            type="button"
+            @click="modelRestrictionMode = 'whitelist'"
+            :class="[
+              'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              modelRestrictionMode === 'whitelist'
+                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+            ]"
+          >
+            {{ t('admin.accounts.modelWhitelist') }}
+          </button>
+          <button
+            type="button"
+            @click="modelRestrictionMode = 'mapping'"
+            :class="[
+              'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              modelRestrictionMode === 'mapping'
+                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
+            ]"
+          >
+            {{ t('admin.accounts.modelMapping') }}
+          </button>
+        </div>
+
+        <div v-if="modelRestrictionMode === 'whitelist'">
+          <ModelWhitelistSelector
+            v-model="allowedModels"
+            platform="kiro"
+            :sync-credentials="kiroCreateSyncCredentials"
+            @update:kiroUpstreamIDs="mergeKiroUpstreamIDs"
+          />
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
+            <span v-if="allowedModels.length === 0 && modelMappings.length === 0" data-testid="kiro-default-mapping-hint">{{
+              t('admin.accounts.kiroUsesDefaultMapping')
+            }}</span>
+          </p>
+        </div>
+
+        <div v-else>
           <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
             <p class="text-xs text-purple-700 dark:text-purple-400">
               {{ t('admin.accounts.mapRequestModels') }}
             </p>
           </div>
 
-          <div v-if="kiroModelMappings.length > 0" class="mb-3 space-y-2">
+          <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
             <div
-              v-for="(mapping, index) in kiroModelMappings"
-              :key="getKiroModelMappingKey(mapping)"
-              class="space-y-1"
+              v-for="(mapping, index) in modelMappings"
+              :key="getModelMappingKey(mapping)"
+              class="flex items-center gap-2"
             >
-              <div class="flex items-center gap-2">
-                <input
-                  v-model="mapping.from"
-                  type="text"
-                  :class="[
-                    'input flex-1',
-                    !isValidWildcardPattern(mapping.from) ? 'border-red-500 dark:border-red-500' : ''
-                  ]"
-                  :placeholder="t('admin.accounts.requestModel')"
-                />
-                <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-                <input
-                  v-model="mapping.to"
-                  type="text"
-                  :class="[
-                    'input flex-1',
-                    mapping.to.includes('*') ? 'border-red-500 dark:border-red-500' : ''
-                  ]"
-                  :placeholder="t('admin.accounts.actualModel')"
-                />
-                <button
-                  type="button"
-                  @click="removeKiroModelMapping(index)"
-                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                >
-                  <Icon name="x" size="sm" />
-                </button>
-              </div>
+              <input
+                v-model="mapping.from"
+                type="text"
+                :class="[
+                  'input flex-1',
+                  !isValidWildcardPattern(mapping.from) ? 'border-red-500 dark:border-red-500' : ''
+                ]"
+                :placeholder="t('admin.accounts.requestModel')"
+              />
+              <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+              <input
+                v-model="mapping.to"
+                type="text"
+                :class="[
+                  'input flex-1',
+                  mapping.to.includes('*') ? 'border-red-500 dark:border-red-500' : ''
+                ]"
+                :placeholder="t('admin.accounts.actualModel')"
+              />
+              <button
+                type="button"
+                @click="removeModelMapping(index)"
+                class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              >
+                <Icon name="x" size="sm" />
+              </button>
             </div>
           </div>
 
-          <button type="button" @click="addKiroModelMapping" class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300">
+          <button type="button" @click="addModelMapping" class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300">
             <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -1762,7 +1801,7 @@
               v-for="preset in kiroPresetMappings"
               :key="preset.label"
               type="button"
-              @click="addKiroPresetMapping(preset.from, preset.to)"
+              @click="addPresetMapping(preset.from, preset.to)"
               :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
             >
               + {{ preset.label }}
@@ -4639,7 +4678,6 @@ import {
   commonErrorCodes,
   buildModelMappingObject,
   fetchAntigravityDefaultMappings,
-  fetchKiroDefaultMappings,
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 import { adminAPI } from '@/api/admin'
@@ -5291,7 +5329,32 @@ const kiroImportTokenPlaceholder = computed(() => {
     ? '{"accessToken":"...","refreshToken":"...","clientIdHash":"...","authMethod":"IdC","provider":"' + kiroImportProvider.value + '"}'
     : '{"accessToken":"...","refreshToken":"...","authMethod":"social","provider":"' + kiroImportProvider.value + '"}'
 })
-const kiroModelMappings = ref<ModelMapping[]>([])
+const kiroUpstreamIDs = ref<Record<string, string>>({})
+const mergeKiroUpstreamIDs = (ids: Record<string, string>) => {
+  kiroUpstreamIDs.value = { ...kiroUpstreamIDs.value, ...ids }
+}
+const kiroCreateSyncCredentials = computed(() => {
+  if (form.platform !== 'kiro' || !apiKeyValue.value.trim()) return undefined
+  if (accountCategory.value === 'apikey') {
+    return { platform: 'kiro', type: 'apikey', api_key: apiKeyValue.value.trim() }
+  }
+  if (accountCategory.value === 'apikey-relay' && apiKeyBaseUrl.value.trim()) {
+    return {
+      platform: 'kiro',
+      type: 'apikey',
+      base_url: apiKeyBaseUrl.value.trim(),
+      api_key: apiKeyValue.value.trim()
+    }
+  }
+  return undefined
+})
+const buildCreateKiroMapping = (direct: boolean) =>
+  buildModelMappingObject(
+    'combined',
+    allowedModels.value,
+    modelMappings.value,
+    direct ? { kiroDirect: true, kiroUpstreamIDs: kiroUpstreamIDs.value } : undefined
+  )
 const kiroCreditUnitPriceUsd = ref(0)
 const kiroPresetMappings = computed(() => getPresetMappingsByPlatform('kiro'))
 const bedrockPresets = computed(() => getPresetMappingsByPlatform('bedrock'))
@@ -5315,7 +5378,6 @@ const tempUnschedRules = ref<TempUnschedRuleForm[]>([])
 const getModelMappingKey = createStableObjectKeyResolver<ModelMapping>('create-model-mapping')
 const getOpenAICompactModelMappingKey = createStableObjectKeyResolver<ModelMapping>('create-openai-compact-model-mapping')
 const getAntigravityModelMappingKey = createStableObjectKeyResolver<ModelMapping>('create-antigravity-model-mapping')
-const getKiroModelMappingKey = createStableObjectKeyResolver<ModelMapping>('create-kiro-model-mapping')
 const getTempUnschedRuleKey = createStableObjectKeyResolver<TempUnschedRuleForm>('create-temp-unsched-rule')
 const geminiOAuthType = ref<'code_assist' | 'google_one' | 'ai_studio'>('google_one')
 const geminiAIStudioOAuthEnabled = ref(false)
@@ -5661,16 +5723,16 @@ watch(
         })
         antigravityWhitelistModels.value = []
       } else if (form.platform === 'kiro') {
-        fetchKiroDefaultMappings().then(mappings => {
-          kiroModelMappings.value = [...mappings]
-        })
+        allowedModels.value = []
+        modelMappings.value = []
+        modelRestrictionMode.value = 'whitelist'
+        kiroUpstreamIDs.value = {}
       } else if (form.platform === 'adobe') {
         applyAdobeModelRestrictionDefaults()
       } else {
         antigravityWhitelistModels.value = []
         antigravityModelMappings.value = []
         antigravityModelRestrictionMode.value = 'mapping'
-        kiroModelMappings.value = []
       }
     } else {
       resetForm()
@@ -5751,9 +5813,8 @@ watch(
       accountCategory.value = 'oauth-based'
       antigravityAccountType.value = 'oauth'
     } else if (newPlatform === 'kiro') {
-      fetchKiroDefaultMappings().then(mappings => {
-        kiroModelMappings.value = [...mappings]
-      })
+      modelRestrictionMode.value = 'whitelist'
+      kiroUpstreamIDs.value = {}
       accountCategory.value = 'oauth-based'
       kiroAccountType.value = 'oauth'
       kiroOAuthProvider.value = 'google'
@@ -5766,7 +5827,6 @@ watch(
       antigravityWhitelistModels.value = []
       antigravityModelMappings.value = []
       antigravityModelRestrictionMode.value = 'mapping'
-      kiroModelMappings.value = []
     }
     // Adobe 走上面的通用 else 分支（它顺带清掉了 antigravity/kiro 的残留），这里只补默认值。
     // 中转 Base URL 必须留空：不能落到 anthropic.com，也不预填官方 OpenAI。
@@ -5959,22 +6019,6 @@ const addAntigravityPresetMapping = (from: string, to: string) => {
     return
   }
   antigravityModelMappings.value.push({ from, to })
-}
-
-const addKiroModelMapping = () => {
-  kiroModelMappings.value.push({ from: '', to: '' })
-}
-
-const removeKiroModelMapping = (index: number) => {
-  kiroModelMappings.value.splice(index, 1)
-}
-
-const addKiroPresetMapping = (from: string, to: string) => {
-  if (kiroModelMappings.value.some((m) => m.from === from)) {
-    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
-    return
-  }
-  kiroModelMappings.value.push({ from, to })
 }
 
 // Error code warning dialog state
@@ -6313,9 +6357,7 @@ const resetForm = () => {
   kiroDeviceRegistrationJson.value = ''
   kiroImportProvider.value = 'Google'
   kiroCreditUnitPriceUsd.value = 0
-  fetchKiroDefaultMappings().then(mappings => {
-    kiroModelMappings.value = [...mappings]
-  })
+  kiroUpstreamIDs.value = {}
   poolModeEnabled.value = false
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
   poolModeRetryStatusCodesInput.value = ''
@@ -6763,7 +6805,7 @@ const handleSubmit = async () => {
       api_region: kiroAPIRegion.value.trim() || 'us-east-1'
     }
 
-    const modelMapping = buildModelMappingObject('mapping', [], kiroModelMappings.value)
+    const modelMapping = buildCreateKiroMapping(true)
     if (modelMapping) {
       credentials.model_mapping = modelMapping
     }
@@ -6802,7 +6844,7 @@ const handleSubmit = async () => {
       base_url: apiKeyBaseUrl.value.trim()
     }
 
-    const modelMapping = buildModelMappingObject('mapping', [], kiroModelMappings.value)
+    const modelMapping = buildCreateKiroMapping(false)
     if (modelMapping) {
       credentials.model_mapping = modelMapping
     }
@@ -8002,7 +8044,7 @@ const handleAntigravityExchange = async (authCode: string) => {
 
 const buildKiroCredentials = (tokenInfo: Parameters<typeof kiroOAuth.buildCredentials>[0]) => {
   const credentials = kiroOAuth.buildCredentials(tokenInfo)
-  const modelMapping = buildModelMappingObject('mapping', [], kiroModelMappings.value)
+  const modelMapping = buildCreateKiroMapping(true)
   if (modelMapping) {
     credentials.model_mapping = modelMapping
   }

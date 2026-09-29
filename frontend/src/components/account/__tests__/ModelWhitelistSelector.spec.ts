@@ -237,4 +237,22 @@ describe('ModelWhitelistSelector', () => {
     expect(syncButton).toBeDefined()
     expect(syncButton?.exists()).toBe(true)
   })
+
+  it('shows the upstream sync button only for Adobe API key relay accounts', () => {
+    const findSyncButton = (wrapper: ReturnType<typeof mountSelector>) => wrapper
+      .findAll('button')
+      .find(button => button.text() === 'admin.accounts.syncUpstreamModels')
+
+    expect(findSyncButton(mountSelector({
+      platform: 'adobe',
+      syncCredentials: {
+        platform: 'adobe',
+        type: 'apikey',
+        base_url: 'https://relay.example.com',
+        api_key: 'sk-test',
+      },
+    }))).toBeDefined()
+    expect(findSyncButton(mountSelector({ platform: 'adobe', accountId: 1, accountType: 'apikey' }))).toBeDefined()
+    expect(findSyncButton(mountSelector({ platform: 'adobe', accountId: 1, accountType: 'oauth' }))).toBeUndefined()
+  })
 })

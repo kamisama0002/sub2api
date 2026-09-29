@@ -154,7 +154,7 @@ import type { SyncUpstreamPreviewParams } from '@/api/admin/accounts'
 import { useClipboard } from '@/composables/useClipboard'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { allModels, getModelsByPlatform } from '@/composables/useModelWhitelist'
+import { allModels, getModelsByPlatform, kiroUpstreamIDsFromMetadata } from '@/composables/useModelWhitelist'
 
 const { t } = useI18n()
 
@@ -165,6 +165,8 @@ const props = withDefaults(defineProps<{
   availableModels?: string[]
   showSyncActions?: boolean
   accountId?: number
+  accountType?: string
+  allowUpstreamSync?: boolean
   syncCredentials?: {
     platform: string
     type: string
@@ -172,11 +174,13 @@ const props = withDefaults(defineProps<{
     api_key: string
   }
 }>(), {
-  showSyncActions: true
+  showSyncActions: true,
+  allowUpstreamSync: true
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string[]]
+  'update:kiroUpstreamIDs': [value: Record<string, string>]
   'upstream-synced': []
 }>()
 
@@ -188,6 +192,7 @@ const searchQuery = ref('')
 const customModel = ref('')
 const isComposing = ref(false)
 const isSyncingUpstream = ref(false)
+const kiroUpstreamIDs = ref<Record<string, string>>({})
 const normalizedPlatforms = computed(() => {
   const rawPlatforms =
     props.platforms && props.platforms.length > 0
@@ -215,15 +220,24 @@ const upstreamSyncPlatforms = new Set([
   'zhipu',
   'deepseek',
   'minimax',
-  'opencode_go'
+  'opencode_go',
+  'adobe',
+  'kiro'
 ])
+// Adobe 只有 API Key 中转号（base_url + api_key）能拉上游 /v1/models；Cookie 号没有静态 Key。
+const isUpstreamSyncable = (platform: string, type: string | undefined) => {
+  const normalized = platform.toLowerCase()
+  if (!upstreamSyncPlatforms.has(normalized)) return false
+  return normalized !== 'adobe' || type === 'apikey'
+}
 const canSyncUpstream = computed(() => {
+  if (!props.allowUpstreamSync) return false
   if (props.accountId) {
     if (normalizedPlatforms.value.length === 0) return true
-    return normalizedPlatforms.value.some(platform => upstreamSyncPlatforms.has(platform.toLowerCase()))
+    return normalizedPlatforms.value.some(platform => isUpstreamSyncable(platform, props.accountType))
   }
   if (props.syncCredentials) {
-    return upstreamSyncPlatforms.has(props.syncCredentials.platform.toLowerCase())
+    return isUpstreamSyncable(props.syncCredentials.platform, props.syncCredentials.type)
   }
   return false
 })
@@ -322,6 +336,11 @@ const syncUpstreamModels = async () => {
     }
 
     const upstreamModels = result.models.map(model => model.trim()).filter(Boolean)
+    const incomingIDs = kiroUpstreamIDsFromMetadata(result.metadata)
+    if (Object.keys(incomingIDs).length > 0) {
+      kiroUpstreamIDs.value = { ...kiroUpstreamIDs.value, ...incomingIDs }
+      emit('update:kiroUpstreamIDs', kiroUpstreamIDs.value)
+    }
     if (upstreamModels.length === 0) {
       appStore.showInfo(t('admin.accounts.syncUpstreamModelsEmpty'))
       return

@@ -855,6 +855,9 @@ const buildAdminErrorLogParams = (includePagination = true): OpsErrorListQueryPa
     account_id: filters.value.account_id ?? undefined,
     group_id: filters.value.group_id ?? undefined,
     model: filters.value.model || undefined,
+    phase: filters.value.error_phase || undefined,
+    category: filters.value.error_category || undefined,
+    status_codes: filters.value.status_code == null ? undefined : String(filters.value.status_code),
   }
   if (includePagination) {
     params.page = errPage.value

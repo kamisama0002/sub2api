@@ -77,6 +77,15 @@ func describeUsageCleanupFilters(filters UsageCleanupFilters) string {
 	if filters.BillingType != nil {
 		parts = append(parts, fmt.Sprintf("billing_type=%d", *filters.BillingType))
 	}
+	if filters.NativeCompactionV2 != nil {
+		parts = append(parts, fmt.Sprintf("native_compaction_v2=%t", *filters.NativeCompactionV2))
+	}
+	if filters.BillingMode != "" {
+		parts = append(parts, "billing_mode="+filters.BillingMode)
+	}
+	if filters.UpstreamModelMismatch != nil {
+		parts = append(parts, fmt.Sprintf("upstream_model_mismatch=%t", *filters.UpstreamModelMismatch))
+	}
 	return strings.Join(parts, " ")
 }
 
@@ -384,6 +393,7 @@ func sanitizeUsageCleanupFilters(filters *UsageCleanupFilters) {
 	if filters.BillingType != nil && *filters.BillingType < 0 {
 		filters.BillingType = nil
 	}
+	filters.BillingMode = strings.TrimSpace(filters.BillingMode)
 }
 
 func (s *UsageCleanupService) maxRangeDays() int {

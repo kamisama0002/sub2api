@@ -776,7 +776,7 @@ func formatKiroTestError(statusCode int, body []byte, requestedModel string, acc
 }
 
 func (s *AccountTestService) executeKiroTestUpstream(ctx context.Context, account *Account, anthropicBody []byte, mappedModel, token string) (*http.Response, error) {
-	modelID := kiropkg.MapModel(mappedModel)
+	modelID := resolveKiroUpstreamModel(mappedModel)
 	currentToken := token
 	// generateAssistantResponse 现在强制要求 profileArn（缺失 → 403 "User is not
 	// authorized to make this call."）。按账号类型解析：API Key → 空；

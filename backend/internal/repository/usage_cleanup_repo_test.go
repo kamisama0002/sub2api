@@ -435,6 +435,35 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatch(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUsageCleanupRepositoryDeleteUsageLogsBatchUsesDetailFilters(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	compaction := true
+	mismatch := false
+	filters := service.UsageCleanupFilters{
+		StartTime:             start,
+		EndTime:               end,
+		NativeCompactionV2:    &compaction,
+		BillingMode:           "image",
+		UpstreamModelMismatch: &mismatch,
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery(`(?s)WITH target AS.*native_compaction_v2 = \$3.*billing_mode = \$4.*upstream_model_mismatch IS FALSE.*DELETE FROM usage_logs`).
+		WithArgs(start, end, true, "image", 2).
+		WillReturnRows(sqlmock.NewRows([]string{"created_at"}))
+	mock.ExpectCommit()
+
+	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	require.NoError(t, err)
+	require.Zero(t, deleted)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUsageCleanupRepositoryDeleteUsageLogsBatchAtomicallyInvalidatesGroupRollups(t *testing.T) {
 	setUsageCleanupRollupTestTimezone(t)
 	db, mock := newSQLMock(t)
@@ -535,8 +564,26 @@ func TestBuildUsageCleanupWhere(t *testing.T) {
 		BillingType: &billingType,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND user_id = $3 AND api_key_id = $4 AND account_id = $5 AND group_id = $6 AND model = $7 AND stream = $8 AND billing_type = $9", where)
+	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND user_id = $3 AND api_key_id = $4 AND account_id = $5 AND group_id = $6 AND COALESCE(NULLIF(TRIM(requested_model), ''), model) = $7 AND stream = $8 AND billing_type = $9", where)
 	require.Equal(t, []any{start, end, userID, apiKeyID, accountID, groupID, "gpt-4", stream, billingType}, args)
+}
+
+func TestBuildUsageCleanupWhereUsageDetailFilters(t *testing.T) {
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	compaction := true
+	mismatch := false
+
+	where, args := buildUsageCleanupWhere(service.UsageCleanupFilters{
+		StartTime:             start,
+		EndTime:               end,
+		NativeCompactionV2:    &compaction,
+		BillingMode:           "image",
+		UpstreamModelMismatch: &mismatch,
+	})
+
+	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND native_compaction_v2 = $3 AND (billing_mode = $4 OR ((billing_mode IS NULL OR billing_mode = '') AND COALESCE(image_count, 0) > 0)) AND upstream_model_mismatch IS FALSE", where)
+	require.Equal(t, []any{start, end, true, "image"}, args)
 }
 
 func TestBuildUsageCleanupWhereRequestTypePriority(t *testing.T) {

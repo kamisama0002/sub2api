@@ -12,6 +12,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	dbusagecleanuptask "github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -422,9 +423,8 @@ func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any)
 	if filters.Model != nil {
 		model := strings.TrimSpace(*filters.Model)
 		if model != "" {
-			conditions = append(conditions, fmt.Sprintf("model = $%d", idx))
-			args = append(args, model)
-			idx++
+			conditions, args = appendUsageLogModelWhereCondition(conditions, args, model, usagestats.ModelSourceRequested)
+			idx = len(args) + 1
 		}
 	}
 	if filters.RequestType != nil {
@@ -440,6 +440,12 @@ func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any)
 	if filters.BillingType != nil {
 		conditions = append(conditions, fmt.Sprintf("billing_type = $%d", idx))
 		args = append(args, *filters.BillingType)
+		idx++
+	}
+	conditions, args = appendNativeCompactionV2WhereCondition(conditions, args, filters.NativeCompactionV2, "")
+	conditions, args = appendUsageLogBillingModeWhereCondition(conditions, args, filters.BillingMode)
+	if filters.UpstreamModelMismatch != nil {
+		conditions = append(conditions, upstreamModelMismatchCondition("upstream_model_mismatch", *filters.UpstreamModelMismatch))
 	}
 	return strings.Join(conditions, " AND "), args
 }

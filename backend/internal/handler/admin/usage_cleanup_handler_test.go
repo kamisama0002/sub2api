@@ -318,10 +318,13 @@ func TestUsageHandlerCreateCleanupTaskSuccess(t *testing.T) {
 	router := setupCleanupRouter(cleanupService, 99)
 
 	payload := map[string]any{
-		"start_date": " 2024-01-01 ",
-		"end_date":   "2024-01-02",
-		"timezone":   "UTC",
-		"model":      "gpt-4",
+		"start_date":              " 2024-01-01 ",
+		"end_date":                "2024-01-02",
+		"timezone":                "UTC",
+		"model":                   "gpt-4",
+		"native_compaction_v2":    true,
+		"billing_mode":            "image",
+		"upstream_model_mismatch": false,
 	}
 	body, err := json.Marshal(payload)
 	require.NoError(t, err)
@@ -344,6 +347,9 @@ func TestUsageHandlerCreateCleanupTaskSuccess(t *testing.T) {
 	require.Equal(t, int64(99), created.CreatedBy)
 	require.NotNil(t, created.Filters.Model)
 	require.Equal(t, "gpt-4", *created.Filters.Model)
+	require.Equal(t, true, *created.Filters.NativeCompactionV2)
+	require.Equal(t, "image", created.Filters.BillingMode)
+	require.Equal(t, false, *created.Filters.UpstreamModelMismatch)
 
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC).Add(24*time.Hour - time.Nanosecond)

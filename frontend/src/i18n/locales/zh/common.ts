@@ -1,24 +1,4 @@
 export default {
-  adminKeys: {
-    "title": "全站 API 密钥",
-    "hint": "查看所有用户及管理员的密钥。完整密钥需动态验证码验证，验证有效期为 15 分钟；每次查看和申请复制均记录操作日志。",
-    "searchPlaceholder": "搜索密钥名称、用户名或邮箱",
-    "owner": "所属用户",
-    "key": "密钥",
-    "group": "分组",
-    "quota": "密钥已用 / 限额",
-    "unlimited": "不限额",
-    "expired": "已过期",
-    "quotaExhausted": "额度耗尽",
-    "reveal": "查看完整密钥",
-    "hide": "隐藏",
-    "copy": "复制密钥",
-    "autoHide": "30 秒后自动隐藏",
-    "setup": "前往个人资料",
-    "audit": "操作日志",
-    "loadFailed": "密钥列表加载失败，请重试。",
-    "revealFailed": "无法获取密钥，请稍后重试。"
-},
   common: {
     loading: '加载中...',
     submitting: '提交中...',

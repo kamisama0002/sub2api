@@ -728,6 +728,10 @@ describe("admin SettingsView payment visible method controls", () => {
 
     const defaultLength = wrapper.get<HTMLInputElement>("#codex-ticket-default-length");
     expect(defaultLength.element.value).toBe("292");
+    const planSection = wrapper.get("#codex-ticket-plan-rule-add").element.parentElement?.parentElement;
+    const claudeVersionSection = wrapper.get('input[placeholder="2.1.280"]').element.parentElement;
+    expect(planSection?.parentElement).toBe(claudeVersionSection?.parentElement);
+    expect(planSection?.parentElement?.classList.contains("space-y-5")).toBe(true);
     let rows = wrapper.findAll('[data-test="codex-ticket-plan-row"]');
     expect(rows).toHaveLength(1);
     // plan 用通用 Select 展示：非预设值（business）原样显示，长度仍是数字输入

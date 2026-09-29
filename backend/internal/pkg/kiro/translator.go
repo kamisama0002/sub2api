@@ -274,6 +274,8 @@ func MapModel(model string) string {
 		return "claude-opus-4.6"
 	case "claude-opus-5", "claude-opus-5-thinking":
 		return "claude-opus-5"
+	case "claude-opus-5-5", "claude-opus-5-5-thinking", "claude-opus-5.5", "claude-opus-5.5-thinking":
+		return "claude-opus-5.5"
 	case "claude-sonnet-5", "claude-sonnet-5-thinking":
 		return "claude-sonnet-5"
 	case "claude-fable-5-1", "claude-fable-5-1-thinking":
@@ -288,11 +290,11 @@ func MapModel(model string) string {
 		return "claude-sonnet-4.5"
 	case "claude-haiku-4-5-20251001", "claude-haiku-4-5-20251001-thinking", "claude-haiku-4.5":
 		return "claude-haiku-4.5"
+	case "claude-sonnet-4-thinking":
+		return "claude-sonnet-4"
 	default:
-		// P3: 通用 Claude 版本号归一化 — 将 claude-{family}-{major}-{minor} 中的
-		// 最后一段短横线转为点号（如 claude-opus-4-9 → claude-opus-4.9），
-		// 兼容不支持 "." 的客户端（如 Claude Code 会把 "4.6" 写成 "4-6"）。
-		// 仅对 version >= 4.6 做归一化（4.5 及以下有带日期后缀的 case，不应该歧义匹配）。
+		// 不带日期的 claude-{family}-{major}-{minor} 把最后一段短横线收成点号。
+		// 正则是整段匹配，claude-opus-4-5-20251101 这类带日期的名字对不上，仍走上面的明确条目。
 		normalized := normalizeClaudeVersionNumber(strings.TrimSpace(strings.ToLower(model)))
 		if normalized != strings.TrimSpace(strings.ToLower(model)) {
 			return normalized
@@ -302,8 +304,8 @@ func MapModel(model string) string {
 }
 
 // normalizeClaudeVersionNumber 将 claude-{family}-{major}-{minor} 格式中的最后一段
-// 版本短横线转为点号。仅适用于 version >= 4.6（避免歧义匹配 4-5 等旧格式）。
-// 例如：claude-opus-4-9 → claude-opus-4.9, claude-opus-4-9-thinking → claude-opus-4.9
+// 版本短横线转为点号。4.5 及以上都折叠；带日期后缀的名字对不上这条正则。
+// 例如：claude-opus-4-9 → claude-opus-4.9, claude-opus-4-5-thinking → claude-opus-4.5
 var claudeVersionNormalizePattern = regexp.MustCompile(
 	`^(claude-(?:sonnet|haiku|opus))-(\d+)-(\d{1,2})(?:-thinking)?$`,
 )
@@ -321,8 +323,8 @@ func normalizeClaudeVersionNumber(model string) string {
 	}
 	major, _ := strconv.Atoi(matches[2])
 	minor, _ := strconv.Atoi(matches[3])
-	// 仅对 >= 4.6 做归一化；4.5 及以下有带日期后缀的明确 case，不应该在这里歧义匹配
-	if major < 4 || (major == 4 && minor < 6) {
+	// 4.4 及更低不折叠。4.5 的不带日期短名字在这里收成点号；带日期的 ID 匹配不到本正则。
+	if major < 4 || (major == 4 && minor < 5) {
 		return model
 	}
 	return matches[1] + "-" + matches[2] + "." + matches[3]
@@ -338,13 +340,83 @@ func normalizeClaudeVersionNumber(model string) string {
 // 仅作用于解析阶段;不会触发 system prompt 注入 <thinking_mode> 前缀,
 // 也不会改写 inferenceConfig,避免改变上游请求语义。
 func requiresImplicitThinkingTagStripping(modelID string) bool {
-	switch strings.TrimSpace(strings.ToLower(modelID)) {
-	case "claude-opus-4.7", "claude-opus-4-7", "claude-opus-4-7-thinking",
-		"claude-opus-4.8", "claude-opus-4-8", "claude-opus-4-8-thinking",
-		"claude-opus-5", "claude-opus-5-thinking":
+	return isKiroHighCapabilityClaude(modelID)
+}
+
+// isKiroHighCapabilityClaude 覆盖 Opus 4.7 及以上，以及 Opus/Sonnet 主版本 >= 5。
+// 点号和短横线写法、重复的 -thinking 后缀都认。Opus 4.6 与 Sonnet 4.6 保持原行为。
+func isKiroHighCapabilityClaude(model string) bool {
+	family, major, minor, hasMinor, ok := claudeOpusSonnetVersion(model)
+	if !ok {
+		return false
+	}
+	if major >= 5 {
 		return true
 	}
-	return false
+	return family == "opus" && major == 4 && hasMinor && minor >= 7
+}
+
+var claudeOpusSonnetVersionPattern = regexp.MustCompile(`^(claude-(opus|sonnet))-(\d+)(?:[.-](\d{1,2}))?$`)
+
+func claudeOpusSonnetVersion(model string) (family string, major, minor int, hasMinor, ok bool) {
+	id := normalizeModelAlias(model)
+	matches := claudeOpusSonnetVersionPattern.FindStringSubmatch(id)
+	if matches == nil {
+		return "", 0, 0, false, false
+	}
+	family = matches[2]
+	major, _ = strconv.Atoi(matches[3])
+	if matches[4] != "" {
+		minor, _ = strconv.Atoi(matches[4])
+		hasMinor = true
+	}
+	return family, major, minor, hasMinor, true
+}
+
+// PublicModelID 把 Kiro 上游 modelId 收成客户端使用的短横线名字。
+// 只对 claude- 前缀把全部点号换成短横线：claude-opus-4.8 → claude-opus-4-8。
+// 没有点号的 Claude 名字和非 Claude 名字保持原样。
+func PublicModelID(modelID string) string {
+	id := normalizeModelAlias(modelID)
+	if strings.HasPrefix(id, "claude-") {
+		return strings.ReplaceAll(id, ".", "-")
+	}
+	return id
+}
+
+// ClaudeAliasKey 去掉重复的 -thinking，再把剩余点号全部换成短横线。
+// 只认 claude- 前缀。用来把客户请求和已知上游 ID 的对外名对齐，不猜测点号该落在哪一段。
+func ClaudeAliasKey(model string) (string, bool) {
+	id := normalizeModelAlias(model)
+	if !strings.HasPrefix(id, "claude-") {
+		return "", false
+	}
+	return strings.ReplaceAll(id, ".", "-"), true
+}
+
+// SyncModelAliases 把一条上游 modelId 展开成要写入账号映射的对外名。
+// 值为上游原样 ID。Claude 额外补一行 -thinking，折叠到同一个上游 ID。
+// Haiku 4.5 再补上客户端常用的带日期名，日期不在上游 ID 里，不能从点号折叠得到。
+func SyncModelAliases(modelID string) [][2]string {
+	upstream := strings.TrimSpace(modelID)
+	if upstream == "" {
+		return nil
+	}
+	publicID := PublicModelID(upstream)
+	if publicID == "" {
+		return nil
+	}
+	aliases := [][2]string{{publicID, upstream}}
+	if strings.HasPrefix(publicID, "claude-") && !strings.HasSuffix(publicID, "-thinking") {
+		aliases = append(aliases, [2]string{publicID + "-thinking", upstream})
+	}
+	if publicID == "claude-haiku-4-5" {
+		aliases = append(aliases,
+			[2]string{"claude-haiku-4-5-20251001", upstream},
+			[2]string{"claude-haiku-4-5-20251001-thinking", upstream},
+		)
+	}
+	return aliases
 }
 
 func normalizeModelAlias(model string) string {
@@ -373,15 +445,14 @@ func IsKiroGPTModel(modelID string) bool {
 func kiroMaxOutputTokensForModel(model string) int {
 	normalized := normalizeModelAlias(model)
 	switch normalized {
-	// Opus 4.7 / 4.8 / 5 与 Kiro GPT-5.6 精确模型上限 128000（对齐 Kiro 官方规格）。
-	case "claude-opus-4-8", "claude-opus-4.8", "claude-opus-4-7", "claude-opus-4.7",
-		"claude-opus-5",
-		"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna":
+	case "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna":
 		return 128000
-	default:
-		// 其余 Kiro 模型（opus-4.6 / sonnet-5 / sonnet-4.6 / 各 4.5 及未知兜底）统一 64000。
-		return kiroDefaultMaxOutputTokens
 	}
+	// Opus 4.7+ 与 Opus/Sonnet 主版本 >= 5 上限 128000。其余（含 Opus 4.6）仍是 64000。
+	if isKiroHighCapabilityClaude(normalized) {
+		return 128000
+	}
+	return kiroDefaultMaxOutputTokens
 }
 
 func clampFloat(value, minValue, maxValue float64) float64 {
@@ -585,10 +656,8 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 	stopSequenceMatched := ""
 	stopSequencePendingText := ""
 	thinkingBuffer := ""
-	var currentThinking strings.Builder
 	inThinkingBlock := false
 	stripThinkingLeadingNewline := false
-	currentMessageID := ""
 	var outputTextBuf strings.Builder
 
 	writeEvent := func(event string, data any) error {
@@ -629,9 +698,6 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 			return err
 		}
 		messageStartSent = true
-		if currentMessageID == "" {
-			currentMessageID = useMsgID
-		}
 		return nil
 	}
 
@@ -645,22 +711,6 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 	closeThinking := func() error {
 		if !thinkingBlockOpen {
 			return nil
-		}
-		if currentThinking.Len() > 0 {
-			sig := thinkingSignature(currentThinking.String(), model, currentMessageID)
-			currentThinking.Reset()
-			if sig != "" {
-				if err := writeEvent("content_block_delta", map[string]any{
-					"type":  "content_block_delta",
-					"index": thinkingBlockIndex,
-					"delta": map[string]any{
-						"type":      "signature_delta",
-						"signature": sig,
-					},
-				}); err != nil {
-					return err
-				}
-			}
 		}
 		thinkingBlockOpen = false
 		return writeEvent("content_block_stop", map[string]any{"type": "content_block_stop", "index": thinkingBlockIndex})
@@ -1027,7 +1077,6 @@ func StreamEventStreamAsAnthropicWithContext(ctx context.Context, body io.Reader
 		}
 		if text != "" {
 			_, _ = outputTextBuf.WriteString(text)
-			_, _ = currentThinking.WriteString(text)
 		}
 		return writeEvent("content_block_delta", map[string]any{
 			"type":  "content_block_delta",
@@ -1461,28 +1510,26 @@ func thinkingDirectiveFromModel(model string) *thinkingDirective {
 		return nil
 	}
 
-	switch normalizeModelAlias(model) {
+	alias := normalizeModelAlias(model)
+	switch alias {
 	case "claude-opus-4-6", "claude-opus-4.6":
 		return &thinkingDirective{
 			Mode:         "adaptive",
 			BudgetTokens: 20000,
 			Effort:       "high",
 		}
-	// opus 4.7/4.8/5 走 adaptive 高预算,budget 对齐 Antigravity 的 ClaudeAdaptiveHighThinkingBudgetTokens
-	// 避免 thinking 提前耗尽导致流式中途断开
-	case "claude-opus-4-7", "claude-opus-4.7",
-		"claude-opus-4-8", "claude-opus-4.8",
-		"claude-opus-5":
+	}
+	// Opus 4.7+ 与主版本 >= 5 走 adaptive 高预算，避免 thinking 提前耗尽导致流式中途断开。
+	if isKiroHighCapabilityClaude(alias) {
 		return &thinkingDirective{
 			Mode:         "adaptive",
 			BudgetTokens: 24576,
 			Effort:       "high",
 		}
-	default:
-		return &thinkingDirective{
-			Mode:         "enabled",
-			BudgetTokens: 20000,
-		}
+	}
+	return &thinkingDirective{
+		Mode:         "enabled",
+		BudgetTokens: 20000,
 	}
 }
 
@@ -3106,7 +3153,7 @@ func parseEventStream(body io.Reader) (string, []KiroToolUse, Usage, string, err
 func buildClaudeResponse(content string, toolUses []KiroToolUse, model string, usage Usage, stopReason string, requestCtx KiroRequestContext) []byte {
 	msgID := newClaudeMessageID()
 	var blocks []map[string]any
-	blocks = append(blocks, extractThinkingBlocksWithSignature(content, model, msgID)...)
+	blocks = append(blocks, extractThinkingBlocks(content)...)
 	stopSequence := ""
 	if len(toolUses) == 0 {
 		if nextBlocks, matched := applyStopSequencesToTextBlocks(blocks, requestCtx.StopSequences); matched != "" {
@@ -3362,10 +3409,6 @@ func hasThinkingBlocksOnly(blocks []map[string]any) bool {
 }
 
 func extractThinkingBlocks(content string) []map[string]any {
-	return extractThinkingBlocksWithSignature(content, "claude", newClaudeMessageID())
-}
-
-func extractThinkingBlocksWithSignature(content, model, msgID string) []map[string]any {
 	if content == "" {
 		return nil
 	}
@@ -3378,9 +3421,8 @@ func extractThinkingBlocksWithSignature(content, model, msgID string) []map[stri
 		thinking := pendingThinking.String()
 		if strings.TrimSpace(thinking) != "" {
 			blocks = append(blocks, map[string]any{
-				"type":      "thinking",
-				"thinking":  thinking,
-				"signature": thinkingSignature(thinking, model, msgID),
+				"type":     "thinking",
+				"thinking": thinking,
 			})
 		}
 		pendingThinking.Reset()

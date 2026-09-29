@@ -5282,15 +5282,9 @@
                     v-model.trim="form.grok_default_text_model"
                     type="text"
                     class="input mt-2 w-full"
-                    list="grok-default-text-model-options"
                     data-testid="grok-default-text-model"
                     placeholder="grok-4.5"
                   />
-                  <datalist id="grok-default-text-model-options">
-                    <option value="grok-4.5" />
-                    <option value="grok-4.1-fast" />
-                    <option value="grok-4" />
-                  </datalist>
                   <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {{ t("admin.settings.gatewayForwarding.grokDefaultTextModelHint") }}
                   </p>
@@ -5956,6 +5950,7 @@
                     {{ t("admin.settings.gatewayForwarding.codexTicketPlanLengthsEmpty") }}
                   </p>
                 </div>
+              </div>
               <!-- Claude Code 客户端版本号 -->
               <div>
                 <label
@@ -6366,7 +6361,6 @@
               </div>
             </div>
           </div>
-        </div>
 
           <!-- Web Search Test Dialog -->
           <div

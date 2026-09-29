@@ -1,24 +1,4 @@
 export default {
-  adminKeys: {
-    "title": "All API Keys",
-    "hint": "View keys owned by all users and administrators. Revealing keys requires authenticator verification, valid for 15 minutes. Each reveal and copy request is audited.",
-    "searchPlaceholder": "Search key name, username or email",
-    "owner": "Owner",
-    "key": "Key",
-    "group": "Group",
-    "quota": "Key usage / limit",
-    "unlimited": "Unlimited",
-    "expired": "Expired",
-    "quotaExhausted": "Quota exhausted",
-    "reveal": "Reveal key",
-    "hide": "Hide",
-    "copy": "Copy key",
-    "autoHide": "Hidden automatically after 30 seconds",
-    "setup": "Go to profile",
-    "audit": "Audit logs",
-    "loadFailed": "Could not load API keys. Please retry.",
-    "revealFailed": "Could not retrieve the key. Please retry."
-},
   common: {
     loading: 'Loading...',
     submitting: 'Submitting...',

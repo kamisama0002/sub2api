@@ -377,7 +377,7 @@ func (s *GatewayService) executeKiroUpstreamWithParsed(ctx context.Context, acco
 		return nil, requestCtx, err
 	}
 
-	modelID := kiropkg.MapModel(mappedModel)
+	modelID := resolveKiroUpstreamModel(mappedModel)
 	currentToken := token
 
 	endpoints := buildKiroEndpoints(account, mode)
@@ -927,7 +927,7 @@ func (s *GatewayService) buildKiroInvalidModelUpstreamEvent(account *Account, re
 		Message:             upstreamMsg,
 		RequestedModel:      requestedModel,
 		MappedModel:         strings.TrimSpace(mappedModel),
-		KiroModelID:         kiropkg.MapModel(mappedModel),
+		KiroModelID:         resolveKiroUpstreamModel(mappedModel),
 		HasTools:            hasTools,
 		HasAdaptiveThinking: hasAdaptiveThinking,
 		HasContext1MBeta:    hasContext1MBeta,

@@ -831,6 +831,7 @@ export default {
         'Map request models to actual models. Left is the requested model, right is the actual model sent to API.',
       selectedModels: 'Selected {count} model(s)',
       supportsAllModels: '(supports all models)',
+      kiroUsesDefaultMapping: '(empty uses the built-in default list)',
       requestModel: 'Request model',
       actualModel: 'Actual model',
       fromModel: 'Source model',

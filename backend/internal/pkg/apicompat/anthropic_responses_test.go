@@ -1136,9 +1136,24 @@ func TestAnthropicToResponses_ThinkingDisabled(t *testing.T) {
 
 	resp, err := AnthropicToResponses(req)
 	require.NoError(t, err)
-	// Default effort applies (medium) even when thinking is disabled.
 	require.NotNil(t, resp.Reasoning)
-	assert.Equal(t, "medium", resp.Reasoning.Effort)
+	assert.Equal(t, "none", resp.Reasoning.Effort)
+	assert.Empty(t, resp.Reasoning.Summary)
+}
+
+func TestAnthropicToResponses_ThinkingDisabledOverridesOutputEffort(t *testing.T) {
+	req := &AnthropicRequest{
+		Model:        "gpt-5.6-sol",
+		MaxTokens:    1024,
+		Messages:     []AnthropicMessage{{Role: "user", Content: json.RawMessage(`"Hello"`)}},
+		Thinking:     &AnthropicThinking{Type: "disabled"},
+		OutputConfig: &AnthropicOutputConfig{Effort: "max"},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Reasoning)
+	assert.Equal(t, "none", resp.Reasoning.Effort)
 }
 
 func TestAnthropicToResponses_NoThinking(t *testing.T) {
@@ -2042,6 +2057,62 @@ func TestAnthropicToResponses_CustomToolCallStream(t *testing.T) {
 	assert.Equal(t, "exec", itemDone.Item.Name)
 	assert.Equal(t, "touch main.go", itemDone.Item.Input)
 	assert.Empty(t, itemDone.Item.Arguments)
+}
+
+// 生产链路（gateway_forward_as_responses）会设置 state.CustomTools，custom 工具在
+// 转换器内部直接走 custom_tool_call 分支，而不是先产出 function_call 再由
+// restorer 还原。中转把完整参数放在 content_block_start 上且不发 delta 时，
+// 该分支同样要用 seed，否则 input 为空；有真实 delta 时 seed 不得与之拼接。
+func TestAnthropicToResponses_CustomToolCallStreamInputOnContentBlockStart(t *testing.T) {
+	for name, partials := range map[string][]string{
+		"seed only":        nil,
+		"seed with deltas": {`{"input":`, `"touch main.go"}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			state := NewAnthropicEventToResponsesState()
+			state.CustomTools = map[string]bool{"exec": true}
+
+			stream := []AnthropicStreamEvent{
+				{Type: "message_start", Message: &AnthropicResponse{ID: "msg_custom_seed", Model: "gpt-5.6-sol", Role: "assistant"}},
+				{Type: "content_block_start", Index: intPtr(0), ContentBlock: &AnthropicContentBlock{
+					Type:  "tool_use",
+					ID:    "toolu_exec",
+					Name:  "exec",
+					Input: json.RawMessage(`{"input":"touch main.go"}`),
+				}},
+			}
+			for _, partial := range partials {
+				stream = append(stream, AnthropicStreamEvent{Type: "content_block_delta", Index: intPtr(0), Delta: &AnthropicDelta{Type: "input_json_delta", PartialJSON: partial}})
+			}
+			stream = append(stream,
+				AnthropicStreamEvent{Type: "content_block_stop", Index: intPtr(0)},
+				AnthropicStreamEvent{Type: "message_delta", Delta: &AnthropicDelta{StopReason: "tool_use"}},
+				AnthropicStreamEvent{Type: "message_stop"},
+			)
+
+			events := collectAnthToResEventsWithState(stream, state)
+
+			var inputDone, itemDone *ResponsesStreamEvent
+			for i := range events {
+				e := &events[i]
+				switch e.Type {
+				case "response.custom_tool_call_input.done":
+					inputDone = e
+				case "response.output_item.done":
+					if e.Item != nil && e.Item.Type == "custom_tool_call" {
+						itemDone = e
+					}
+				case "response.function_call_arguments.delta", "response.function_call_arguments.done":
+					t.Fatalf("custom 工具调用不应产出 function_call 参数事件: %s", e.Type)
+				}
+			}
+
+			require.NotNil(t, inputDone, "缺少 custom_tool_call_input.done")
+			assert.Equal(t, "touch main.go", inputDone.Input)
+			require.NotNil(t, itemDone, "缺少 custom_tool_call output_item.done")
+			assert.Equal(t, "touch main.go", itemDone.Item.Input)
+		})
+	}
 }
 
 func TestAnthropicToResponses_NonStreamingCustomToolCall(t *testing.T) {

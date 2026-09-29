@@ -671,6 +671,9 @@ describe('admin UsageView errors tab filter forwarding', () => {
     vm.filters.model = 'gpt-5.3-codex'
     vm.filters.account_id = 7
     vm.filters.group_id = 3
+    vm.filters.error_phase = 'request'
+    vm.filters.error_category = 'cyber'
+    vm.filters.status_code = 200
     await flushPromises()
 
     // 切换到「错误请求」标签（第二个 tab 按钮）触发 loadAdminErrors
@@ -683,6 +686,9 @@ describe('admin UsageView errors tab filter forwarding', () => {
       model: 'gpt-5.3-codex',
       account_id: 7,
       group_id: 3,
+      phase: 'request',
+      category: 'cyber',
+      status_codes: '200',
     }))
   })
 
@@ -719,6 +725,9 @@ describe('admin UsageView errors tab filter forwarding', () => {
     vm.filters.model = 'gpt-5.3-codex'
     vm.filters.account_id = 7
     vm.filters.group_id = 3
+    vm.filters.error_phase = 'request'
+    vm.filters.error_category = 'cyber'
+    vm.filters.status_code = 200
 
     await wrapper.findAll('[data-testid="usage-detail-tab"]')[1].trigger('click')
     await flushPromises()
@@ -738,6 +747,9 @@ describe('admin UsageView errors tab filter forwarding', () => {
       model: 'gpt-5.3-codex',
       account_id: 7,
       group_id: 3,
+      phase: 'request',
+      category: 'cyber',
+      status_codes: '200',
     }))
     expect(listErrorLogs).toHaveBeenCalledTimes(2)
   })

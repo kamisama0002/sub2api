@@ -327,6 +327,15 @@ const buildPayload = (): CreateUsageCleanupTaskRequest | null => {
   if (localFilters.value.billing_type !== null && localFilters.value.billing_type !== undefined) {
     payload.billing_type = localFilters.value.billing_type
   }
+  if (localFilters.value.native_compaction_v2 !== null && localFilters.value.native_compaction_v2 !== undefined) {
+    payload.native_compaction_v2 = localFilters.value.native_compaction_v2
+  }
+  if (localFilters.value.billing_mode) {
+    payload.billing_mode = localFilters.value.billing_mode
+  }
+  if (localFilters.value.upstream_model_mismatch !== null && localFilters.value.upstream_model_mismatch !== undefined) {
+    payload.upstream_model_mismatch = localFilters.value.upstream_model_mismatch
+  }
 
   return payload
 }

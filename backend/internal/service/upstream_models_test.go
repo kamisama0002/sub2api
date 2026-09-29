@@ -374,6 +374,40 @@ func TestBuildAntigravityAPIKeyModelsRequestRejectsOfficialCloudCodeBase(t *test
 	require.Contains(t, syncErr.SafeMessage(), "compatible gateway")
 }
 
+func TestBuildUpstreamModelsRequestSupportsAdobeRelay(t *testing.T) {
+	t.Parallel()
+
+	svc := &AccountTestService{cfg: upstreamModelSyncTestConfig()}
+	req, err := svc.buildUpstreamModelsRequest(context.Background(), &Account{
+		Platform: PlatformAdobe,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "adobe-relay-key",
+			"base_url": "https://relay.example.com/",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "https://relay.example.com/v1/models", req.URL.String())
+	require.Equal(t, "Bearer adobe-relay-key", req.Header.Get("Authorization"))
+}
+
+func TestBuildUpstreamModelsRequestRejectsAdobeWithoutRelay(t *testing.T) {
+	t.Parallel()
+
+	svc := &AccountTestService{cfg: upstreamModelSyncTestConfig()}
+	for _, account := range []*Account{
+		{Platform: PlatformAdobe, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "adobe-key"}},
+		{Platform: PlatformAdobe, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "token"}},
+	} {
+		_, err := svc.buildUpstreamModelsRequest(context.Background(), account)
+		require.Error(t, err)
+
+		var syncErr *UpstreamModelSyncError
+		require.True(t, errors.As(err, &syncErr))
+		require.Equal(t, UpstreamModelSyncErrorConfiguration, syncErr.Kind)
+	}
+}
+
 func TestBuildAnthropicUpstreamModelsRequestRejectsBedrock(t *testing.T) {
 	t.Parallel()
 

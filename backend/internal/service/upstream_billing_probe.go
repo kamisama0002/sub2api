@@ -1004,6 +1004,8 @@ func decodeUpstreamBillingProbeSnapshot(extra map[string]any) *UpstreamBillingPr
 // Kiro direct accounts have no base_url, so they take the existing unsupported
 // fast path without sending an invalid request to AWS; Kiro relay accounts with
 // a custom base_url probe /v1/sub2api/billing normally.
+// Adobe apikey accounts are OpenAI-shaped relays (required base_url + api_key,
+// see IsAdobeRelayAccount), so they probe their relay like any other platform.
 // Only AccountTypeAPIKey is in scope. OAuth/Bedrock hold no static API key to
 // present at all; AccountTypeUpstream (antigravity relay accounts) does carry
 // a base_url plus a static api_key, but it is deliberately left out of the
@@ -1016,7 +1018,7 @@ func IsUpstreamBillingProbeIdentity(platform, accountType string) bool {
 	}
 	switch platform {
 	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformAntigravity, PlatformGrok, PlatformKiro,
-		PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo:
+		PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo, PlatformAdobe:
 		return true
 	default:
 		return false

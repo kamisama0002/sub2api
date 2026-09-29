@@ -227,6 +227,12 @@ type AnthropicEventToResponsesState struct {
 	CurrentThinking            AnthropicContentBlock
 	PreserveThinkingSignatures bool
 
+	// PendingToolInput holds tool arguments that arrived complete on
+	// content_block_start instead of as input_json_delta. It is only consumed at
+	// content_block_stop, and only when no delta ever arrived, so a canonical
+	// Anthropic stream keeps its exact event sequence.
+	PendingToolInput string
+
 	// Outputs accumulates every closed output item so that response.completed
 	// can carry the full output list. The OpenAI SDK's get_final_response()
 	// parses the terminal event's response directly; without this, clients see
@@ -415,6 +421,12 @@ func anthToResHandleContentBlockStart(evt *AnthropicStreamEvent, state *Anthropi
 		state.CurrentCallID = toResponsesCallID(evt.ContentBlock.ID)
 		state.CurrentName = evt.ContentBlock.Name
 		state.CurrentArgs.Reset()
+		// The canonical Anthropic stream leaves input empty here and streams the
+		// arguments as input_json_delta, but Anthropic-compatible relays may put
+		// the complete arguments on this event and never send a delta. Keep them
+		// as a seed rather than emitting now: a delta, if one follows, is
+		// authoritative and must not be concatenated onto this JSON.
+		state.PendingToolInput = seedToolArguments(evt.ContentBlock.Input)
 
 		events = append(events, makeResponsesEvent(state, "response.output_item.added", &ResponsesStreamEvent{
 			OutputIndex: state.OutputIndex,
@@ -465,6 +477,9 @@ func anthToResHandleContentBlockDelta(evt *AnthropicStreamEvent, state *Anthropi
 		if evt.Delta.PartialJSON == "" {
 			return nil
 		}
+		// A real delta supersedes whatever content_block_start carried; keeping
+		// both would splice two complete JSON documents together.
+		state.PendingToolInput = ""
 		// Accumulate the fragment so terminal events can carry the full tool input.
 		_, _ = state.CurrentArgs.WriteString(evt.Delta.PartialJSON)
 		if state.CurrentItemType == "custom_tool_call" {
@@ -504,22 +519,43 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 		return events
 
 	case "function_call":
-		// Emit function_call_arguments.done + output item done. Codex needs the
-		// full arguments on both terminal events to deserialize and execute the
-		// call, so carry the accumulated buffer (defaulting to "{}").
-		events := []ResponsesStreamEvent{
-			makeResponsesEvent(state, "response.function_call_arguments.done", &ResponsesStreamEvent{
+		var events []ResponsesStreamEvent
+		// No delta ever arrived, so the arguments the upstream put on
+		// content_block_start are all there is. Emit them as one delta here so
+		// the done event below still repeats exactly what the deltas streamed.
+		if state.CurrentArgs.Len() == 0 && state.PendingToolInput != "" {
+			_, _ = state.CurrentArgs.WriteString(state.PendingToolInput)
+			events = append(events, makeResponsesEvent(state, "response.function_call_arguments.delta", &ResponsesStreamEvent{
 				OutputIndex: state.OutputIndex,
+				Delta:       state.PendingToolInput,
 				ItemID:      state.CurrentItemID,
 				CallID:      state.CurrentCallID,
 				Name:        state.CurrentName,
-				Arguments:   normalizeResponsesFunctionArgs(state.CurrentArgs.String()),
-			}),
+			}))
 		}
+		state.PendingToolInput = ""
+
+		// Emit function_call_arguments.done + output item done. Codex needs the
+		// full arguments on both terminal events to deserialize and execute the
+		// call, so carry the accumulated buffer (defaulting to "{}").
+		events = append(events, makeResponsesEvent(state, "response.function_call_arguments.done", &ResponsesStreamEvent{
+			OutputIndex: state.OutputIndex,
+			ItemID:      state.CurrentItemID,
+			CallID:      state.CurrentCallID,
+			Name:        state.CurrentName,
+			Arguments:   normalizeResponsesFunctionArgs(state.CurrentArgs.String()),
+		}))
 		events = append(events, closeCurrentResponsesItem(state)...)
 		return events
 
 	case "custom_tool_call":
+		// 与 function_call 分支同理：中转把完整参数放在 content_block_start 上且不发
+		// delta 时，seed 是唯一来源。custom 工具不向客户端流式发参数 delta，只需把
+		// seed 并入缓冲，否则 input 为空、工具以空参数执行。
+		if state.CurrentArgs.Len() == 0 && state.PendingToolInput != "" {
+			_, _ = state.CurrentArgs.WriteString(state.PendingToolInput)
+		}
+		state.PendingToolInput = ""
 		input := extractCustomToolCallInput(normalizeResponsesFunctionArgs(state.CurrentArgs.String()))
 		events := []ResponsesStreamEvent{}
 		if input != "" {
@@ -616,6 +652,19 @@ func anthropicResponsesStreamTerminalState(stopReason string) (string, *Response
 	return "completed", nil
 }
 
+// seedToolArguments normalizes a tool_use content block's inline input into a
+// seed for the streaming converter. Empty, absent and no-argument payloads
+// return "" so the existing "{}" fallback still applies and no empty delta is
+// synthesized.
+func seedToolArguments(input json.RawMessage) string {
+	trimmed := strings.TrimSpace(string(input))
+	switch trimmed {
+	case "", "{}", "null":
+		return ""
+	}
+	return trimmed
+}
+
 func closeCurrentResponsesItem(state *AnthropicEventToResponsesState) []ResponsesStreamEvent {
 	if state.CurrentItemType == "" {
 		return nil
@@ -641,6 +690,7 @@ func closeCurrentResponsesItem(state *AnthropicEventToResponsesState) []Response
 	state.CurrentName = ""
 	state.CurrentArgs.Reset()
 	state.CurrentContent = nil
+	state.PendingToolInput = ""
 	state.CurrentSummary = ""
 	state.CurrentThinking = AnthropicContentBlock{}
 	state.TextAccum = ""

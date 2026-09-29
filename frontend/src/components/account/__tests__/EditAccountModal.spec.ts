@@ -1992,3 +1992,86 @@ describe('EditAccountModal Adobe model mapping', () => {
     expect(agentWrapper.find('[data-testid="edit-codex-telemetry-toggle"]').exists()).toBe(false)
   })
 })
+
+describe('EditAccountModal Kiro model restriction', () => {
+  beforeEach(() => {
+    authIsSimpleMode.value = true
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+  })
+
+  afterEach(() => vi.clearAllMocks())
+
+  it('shows a derived Kiro pair as a whitelist entry and keeps a custom row', async () => {
+    const account = buildKiroOAuthAccount()
+    account.credentials.model_mapping = {
+      'claude-opus-4-8': 'claude-opus-4.8',
+      'codex-auto-review': 'gpt-5.6-luna'
+    }
+    const wrapper = mountModal(account)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('claude-opus-4-8')
+    expect(wrapper.findAll('[data-testid="oauth-model-mapping-from"]')).toHaveLength(0)
+
+    const mappingToggle = wrapper.findAll('button').find((button) => button.text() === 'admin.accounts.modelMapping')
+    expect(mappingToggle).toBeTruthy()
+    await mappingToggle!.trigger('click')
+
+    const froms = wrapper.findAll<HTMLInputElement>('[data-testid="oauth-model-mapping-from"]')
+    expect(froms).toHaveLength(1)
+    expect(froms[0].element.value).toBe('codex-auto-review')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="oauth-model-mapping-to"]').element.value).toBe('gpt-5.6-luna')
+    wrapper.unmount()
+  })
+
+  it('leaves an empty Kiro mapping on the default-list hint', async () => {
+    const account = buildKiroOAuthAccount()
+    delete account.credentials.model_mapping
+    const wrapper = mountModal(account)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('')
+    expect(wrapper.find('[data-testid="kiro-default-mapping-hint"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="oauth-model-mapping-from"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('round-trips a direct Kiro account without rewriting custom targets', async () => {
+    const account = buildKiroOAuthAccount()
+    account.credentials.model_mapping = {
+      'claude-opus-4-8': 'claude-opus-4.8',
+      'codex-auto-review': 'gpt-5.6-luna'
+    }
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await flushPromises()
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    // 直连 Kiro 白名单的标准存法是恒等（转发时 MapModel 仍折成 claude-opus-4.8），
+    // 老的点号行保存后改写成恒等；自定义映射原样保留。
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual({
+      'claude-opus-4-8': 'claude-opus-4-8',
+      'codex-auto-review': 'gpt-5.6-luna'
+    })
+    wrapper.unmount()
+  })
+
+  it('keeps a relay identity mapping instead of rewriting it to a dotted Kiro id', async () => {
+    const account = buildKiroAPIKeyAccount('https://relay.example/v1')
+    account.credentials.model_mapping = { 'claude-opus-4-8': 'claude-opus-4-8' }
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await flushPromises()
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual({
+      'claude-opus-4-8': 'claude-opus-4-8'
+    })
+    wrapper.unmount()
+  })
+})

@@ -671,6 +671,7 @@ func TestKiroMinimumCacheableTokens(t *testing.T) {
 	// opus 系走 4096，含 -thinking 变体与带日期后缀的 4.5。
 	for _, model := range []string{
 		"claude-opus-5", "claude-opus-5-thinking",
+		"claude-opus-5-5", "claude-opus-5-5-thinking",
 		"claude-opus-4-8", "claude-opus-4-8-thinking",
 		"claude-opus-4-5-20251101", "claude-opus-4-5-20251101-thinking",
 	} {
@@ -699,6 +700,8 @@ func TestKiroMinimumCacheableTokens(t *testing.T) {
 		"claude-opus-4-6-thinking":            4096,
 		"claude-opus-5":                       4096,
 		"claude-opus-5-thinking":              4096,
+		"claude-opus-5-5":                     4096,
+		"claude-opus-5-5-thinking":            4096,
 		"claude-opus-4-5-20251101":            4096,
 		"claude-opus-4-5-20251101-thinking":   4096,
 		"claude-sonnet-5":                     1024,

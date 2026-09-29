@@ -75,11 +75,16 @@ func TestUsageCleanupTaskFromService_RequestTypeMapping(t *testing.T) {
 	t.Parallel()
 
 	requestType := int16(service.RequestTypeStream)
+	compaction := true
+	mismatch := false
 	task := &service.UsageCleanupTask{
 		ID:     1,
 		Status: service.UsageCleanupStatusPending,
 		Filters: service.UsageCleanupFilters{
-			RequestType: &requestType,
+			RequestType:           &requestType,
+			NativeCompactionV2:    &compaction,
+			BillingMode:           "image",
+			UpstreamModelMismatch: &mismatch,
 		},
 	}
 
@@ -87,6 +92,9 @@ func TestUsageCleanupTaskFromService_RequestTypeMapping(t *testing.T) {
 	require.NotNil(t, dtoTask)
 	require.NotNil(t, dtoTask.Filters.RequestType)
 	require.Equal(t, "stream", *dtoTask.Filters.RequestType)
+	require.Equal(t, true, *dtoTask.Filters.NativeCompactionV2)
+	require.Equal(t, "image", dtoTask.Filters.BillingMode)
+	require.Equal(t, false, *dtoTask.Filters.UpstreamModelMismatch)
 }
 
 func TestRequestTypeStringPtrNil(t *testing.T) {

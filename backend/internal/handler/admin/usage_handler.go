@@ -44,17 +44,20 @@ func NewUsageHandler(
 
 // CreateUsageCleanupTaskRequest represents cleanup task creation request
 type CreateUsageCleanupTaskRequest struct {
-	StartDate   string  `json:"start_date"`
-	EndDate     string  `json:"end_date"`
-	UserID      *int64  `json:"user_id"`
-	APIKeyID    *int64  `json:"api_key_id"`
-	AccountID   *int64  `json:"account_id"`
-	GroupID     *int64  `json:"group_id"`
-	Model       *string `json:"model"`
-	RequestType *string `json:"request_type"`
-	Stream      *bool   `json:"stream"`
-	BillingType *int8   `json:"billing_type"`
-	Timezone    string  `json:"timezone"`
+	StartDate             string  `json:"start_date"`
+	EndDate               string  `json:"end_date"`
+	UserID                *int64  `json:"user_id"`
+	APIKeyID              *int64  `json:"api_key_id"`
+	AccountID             *int64  `json:"account_id"`
+	GroupID               *int64  `json:"group_id"`
+	Model                 *string `json:"model"`
+	RequestType           *string `json:"request_type"`
+	Stream                *bool   `json:"stream"`
+	BillingType           *int8   `json:"billing_type"`
+	NativeCompactionV2    *bool   `json:"native_compaction_v2"`
+	BillingMode           string  `json:"billing_mode"`
+	UpstreamModelMismatch *bool   `json:"upstream_model_mismatch"`
+	Timezone              string  `json:"timezone"`
 }
 
 // List handles listing all usage records with filters
@@ -543,16 +546,19 @@ func (h *UsageHandler) CreateCleanupTask(c *gin.Context) {
 	}
 
 	filters := service.UsageCleanupFilters{
-		StartTime:   startTime,
-		EndTime:     endTime,
-		UserID:      req.UserID,
-		APIKeyID:    req.APIKeyID,
-		AccountID:   req.AccountID,
-		GroupID:     req.GroupID,
-		Model:       req.Model,
-		RequestType: requestType,
-		Stream:      stream,
-		BillingType: req.BillingType,
+		StartTime:             startTime,
+		EndTime:               endTime,
+		UserID:                req.UserID,
+		APIKeyID:              req.APIKeyID,
+		AccountID:             req.AccountID,
+		GroupID:               req.GroupID,
+		Model:                 req.Model,
+		RequestType:           requestType,
+		Stream:                stream,
+		BillingType:           req.BillingType,
+		NativeCompactionV2:    req.NativeCompactionV2,
+		BillingMode:           req.BillingMode,
+		UpstreamModelMismatch: req.UpstreamModelMismatch,
 	}
 
 	var userID any

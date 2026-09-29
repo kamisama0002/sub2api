@@ -895,6 +895,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 				ImageOutputTokens:   result.Usage.ImageOutputTokens,
 			},
 			cost.TotalCost, pricingAt,
+			accountStatsLongContextPricingEnabled(nil),
 		)
 	}
 
@@ -998,7 +999,55 @@ func (s *GatewayService) calculateRecordUsageCost(
 	return tokenCost
 }
 
-const kiroConservativeFallbackBillingModel = "claude-opus-4-6"
+const (
+	kiroConservativeFallbackBillingModel = "claude-opus-4-6"
+	kiroQwenCoderNextBillingModel        = "qwen3-coder-next"
+	kiroQwenCoderNextAnchorModel         = "claude-sonnet-4-5"
+	// Kiro 界面里 Qwen 是 0.05x Credit，Sonnet 4.5 是 1.3x。兜底价按这个比例缩放 Sonnet 单价。
+	kiroQwenCoderNextCreditRatio = 0.05 / 1.3
+)
+
+func isKiroQwenCoderNextBillingModel(billingModel string, opts *recordUsageOpts) bool {
+	if opts == nil || !opts.IsKiroAccount {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(billingModel), kiroQwenCoderNextBillingModel)
+}
+
+func (s *GatewayService) calculateKiroQwenCoderNextTokenCost(tokens UsageTokens, multiplier float64) *CostBreakdown {
+	if s == nil || s.billingService == nil {
+		return nil
+	}
+	pricing, err := s.billingService.GetModelPricing(kiroQwenCoderNextAnchorModel)
+	if err != nil || pricing == nil {
+		logger.LegacyPrintf("service.gateway", "Calculate Kiro Qwen fallback cost failed: %v", err)
+		return nil
+	}
+	scaled := scaleModelPricing(*pricing, kiroQwenCoderNextCreditRatio)
+	// 系数只缩放基础单价，不带 Sonnet 4.5 超过 20 万 token 的长上下文加价。
+	scaled.LongContextInputThreshold = 0
+	scaled.LongContextInputMultiplier = 0
+	scaled.LongContextOutputMultiplier = 0
+	cost := s.billingService.computeTokenBreakdown(&scaled, tokens, multiplier, "", false)
+	if cost != nil && cost.BillingMode == "" {
+		cost.BillingMode = string(BillingModeToken)
+	}
+	return cost
+}
+
+func scaleModelPricing(pricing ModelPricing, ratio float64) ModelPricing {
+	pricing.InputPricePerToken *= ratio
+	pricing.InputPricePerTokenPriority *= ratio
+	pricing.OutputPricePerToken *= ratio
+	pricing.OutputPricePerTokenPriority *= ratio
+	pricing.CacheCreationPricePerToken *= ratio
+	pricing.CacheCreationPricePerTokenPriority *= ratio
+	pricing.CacheReadPricePerToken *= ratio
+	pricing.CacheReadPricePerTokenPriority *= ratio
+	pricing.CacheCreation5mPrice *= ratio
+	pricing.CacheCreation1hPrice *= ratio
+	return pricing
+}
 
 func shouldUseKiroConservativeBillingFallback(result *ForwardResult, billingModel string, opts *recordUsageOpts) bool {
 	if result == nil {
@@ -1190,6 +1239,16 @@ func (s *GatewayService) calculateTokenCost(
 		CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
 		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		ImageOutputTokens:     result.Usage.ImageOutputTokens,
+	}
+
+	// qwen3-coder-next 没有目录价，查价失败后会掉进 Opus 保守兜底。
+	// 分组或渠道已经给这个名字定价时不插入，沿用下面的正常路径。
+	if isKiroQwenCoderNextBillingModel(billingModel, firstRecordUsageOpts(opts)) &&
+		s.resolveChannelPricing(ctx, billingModel, apiKey) == nil {
+		if fallback := s.calculateKiroQwenCoderNextTokenCost(tokens, multiplier); fallback != nil {
+			logger.LegacyPrintf("service.gateway", "Using Kiro credit-scaled fallback pricing for model=%s", billingModel)
+			return fallback
+		}
 	}
 
 	var resolved *ResolvedPricing

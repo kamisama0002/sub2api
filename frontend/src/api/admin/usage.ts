@@ -49,6 +49,9 @@ export interface UsageCleanupFilters {
   request_type?: UsageRequestType | null
   stream?: boolean | null
   billing_type?: number | null
+  native_compaction_v2?: boolean | null
+  billing_mode?: string | null
+  upstream_model_mismatch?: boolean | null
 }
 
 export interface UsageCleanupTask {
@@ -77,6 +80,9 @@ export interface CreateUsageCleanupTaskRequest {
   request_type?: UsageRequestType | null
   stream?: boolean | null
   billing_type?: number | null
+  native_compaction_v2?: boolean | null
+  billing_mode?: string | null
+  upstream_model_mismatch?: boolean | null
   timezone?: string
 }
 

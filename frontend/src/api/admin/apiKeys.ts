@@ -4,21 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { ApiKey, PaginatedResponse, User } from '@/types'
-
-export interface AdminApiKey extends ApiKey {
-  user?: Pick<User, 'id' | 'username' | 'email'>
-}
-
-export async function listApiKeys(params: { page: number; page_size: number; search?: string; status?: string; user_id?: number }): Promise<PaginatedResponse<AdminApiKey>> {
-  const { data } = await apiClient.get<PaginatedResponse<AdminApiKey>>('/admin/api-keys', { params })
-  return data
-}
-
-export async function revealApiKey(id: number, purpose: 'view' | 'copy'): Promise<{ id: number; key: string }> {
-  const { data } = await apiClient.post<{ id: number; key: string }>(`/admin/api-keys/${id}/reveal`, { purpose })
-  return data
-}
+import type { ApiKey } from '@/types'
 
 export interface UpdateApiKeyGroupResult {
   api_key: ApiKey
@@ -41,8 +27,6 @@ export async function updateApiKeyGroup(id: number, groupId: number | null): Pro
 }
 
 export const apiKeysAPI = {
-  listApiKeys,
-  revealApiKey,
   updateApiKeyGroup
 }
 

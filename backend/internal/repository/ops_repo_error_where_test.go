@@ -94,3 +94,31 @@ func TestOpsRepositoryDeleteErrorLogs_UsesExistingFilterSemantics(t *testing.T) 
 		t.Fatalf("unmet expectations: %v", err)
 	}
 }
+
+func TestOpsRepositoryDeleteErrorLogs_UsesErrorFacetFilters(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &opsRepository{db: db}
+	start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	filter := &service.OpsErrorLogFilter{
+		StartTime:      &start,
+		EndTime:        &end,
+		View:           "all",
+		Phase:          "request",
+		StatusCodes:    []int{200},
+		ErrorPhasesAny: []string{"request"},
+		ErrorTypesAny:  []string{"cyber_policy"},
+	}
+
+	mock.ExpectExec(`(?s)DELETE FROM ops_error_logs e WHERE.*e.error_phase = \$3.*COALESCE\(e.upstream_status_code, e.status_code, 0\) = ANY\(\$4\).*e.error_phase = ANY\(\$5\).*e.error_type = ANY\(\$6\)`).
+		WithArgs(start, end, "request", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	deleted, err := repo.DeleteErrorLogs(context.Background(), filter)
+	if err != nil || deleted != 2 {
+		t.Fatalf("DeleteErrorLogs = (%d, %v), want (2, nil)", deleted, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

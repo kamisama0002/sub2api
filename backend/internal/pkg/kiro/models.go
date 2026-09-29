@@ -19,6 +19,8 @@ var DefaultModels = []Model{
 	{ID: "claude-opus-4-6-thinking", Type: "model", DisplayName: "Claude Opus 4.6 (Thinking)"},
 	{ID: "claude-opus-5", Type: "model", DisplayName: "Claude Opus 5"},
 	{ID: "claude-opus-5-thinking", Type: "model", DisplayName: "Claude Opus 5 (Thinking)"},
+	{ID: "claude-opus-5-5", Type: "model", DisplayName: "Claude Opus 5.5"},
+	{ID: "claude-opus-5-5-thinking", Type: "model", DisplayName: "Claude Opus 5.5 (Thinking)"},
 	{ID: "claude-sonnet-5", Type: "model", DisplayName: "Claude Sonnet 5"},
 	{ID: "claude-sonnet-5-thinking", Type: "model", DisplayName: "Claude Sonnet 5 (Thinking)"},
 	{ID: "claude-sonnet-4-6", Type: "model", DisplayName: "Claude Sonnet 4.6"},

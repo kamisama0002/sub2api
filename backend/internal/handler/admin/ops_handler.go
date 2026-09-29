@@ -183,23 +183,12 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 			return
 		}
 	}
-	if statusCodesStr := strings.TrimSpace(c.Query("status_codes")); statusCodesStr != "" {
-		parts := strings.Split(statusCodesStr, ",")
-		out := make([]int, 0, len(parts))
-		for _, part := range parts {
-			p := strings.TrimSpace(part)
-			if p == "" {
-				continue
-			}
-			n, err := strconv.Atoi(p)
-			if err != nil || n < 0 {
-				response.BadRequest(c, "Invalid status_codes")
-				return
-			}
-			out = append(out, n)
-		}
-		filter.StatusCodes = out
+	statusCodes, err := parseOpsErrorStatusCodes(c.Query("status_codes"))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
+	filter.StatusCodes = statusCodes
 
 	applyOpsErrorSortParams(c, filter)
 
@@ -238,7 +227,23 @@ func (h *OpsHandler) DeleteErrorLogs(c *gin.Context) {
 		EndTime:   &endTime,
 		View:      parseOpsViewParam(c),
 		Model:     strings.TrimSpace(c.Query("model")),
+		Phase:     strings.TrimSpace(c.Query("phase")),
 	}
+	if category := strings.TrimSpace(c.Query("category")); category != "" {
+		phases, types := service.CategoryToFilter(category)
+		if len(phases) == 0 && len(types) == 0 {
+			response.BadRequest(c, "Invalid category")
+			return
+		}
+		filter.ErrorPhasesAny = phases
+		filter.ErrorTypesAny = types
+	}
+	statusCodes, err := parseOpsErrorStatusCodes(c.Query("status_codes"))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	filter.StatusCodes = statusCodes
 	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
@@ -278,6 +283,29 @@ func (h *OpsHandler) DeleteErrorLogs(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"deleted_rows": deleted})
+}
+
+func parseOpsErrorStatusCodes(raw string) ([]int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	codes := make([]int, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		code, err := strconv.Atoi(value)
+		if err != nil || code < 0 {
+			return nil, fmt.Errorf("Invalid status_codes")
+		}
+		codes = append(codes, code)
+	}
+	if len(codes) == 0 {
+		return nil, fmt.Errorf("Invalid status_codes")
+	}
+	return codes, nil
 }
 
 // ListRequestErrors lists client-visible request errors.
