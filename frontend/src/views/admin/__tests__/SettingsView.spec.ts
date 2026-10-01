@@ -740,7 +740,7 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(planSelect.props("options")).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ value: "plus", label: "Plus" }),
-        expect.objectContaining({ value: "team", label: "Business Standard" }),
+        expect.objectContaining({ value: "team", label: "Business" }),
         expect.objectContaining({ value: "self_serve_business_prolite", label: "Business Premium" }),
       ]),
     );

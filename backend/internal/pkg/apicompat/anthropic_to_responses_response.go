@@ -60,7 +60,7 @@ func AnthropicToResponsesResponseWithCustomTools(resp *AnthropicResponse, custom
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "thinking", "redacted_thinking":
-			if claude.IsOpus55(resp.Model) && (block.Signature != "" || block.Data != "") {
+			if (claude.IsOpus55(resp.Model) || claude.IsSonnet55(resp.Model)) && (block.Signature != "" || block.Data != "") {
 				item := ResponsesOutput{Type: "reasoning", ID: generateItemID(), EncryptedContent: encodeAnthropicThinking(block)}
 				if block.Thinking != "" {
 					item.Summary = []ResponsesSummary{{Type: "summary_text", Text: block.Thinking}}
@@ -79,7 +79,7 @@ func AnthropicToResponsesResponseWithCustomTools(resp *AnthropicResponse, custom
 				})
 			}
 		case "text":
-			if claude.IsOpus55(resp.Model) && block.Text != "" {
+			if (claude.IsOpus55(resp.Model) || claude.IsSonnet55(resp.Model)) && block.Text != "" {
 				outputs = append(outputs, ResponsesOutput{Type: "message", ID: generateItemID(), Role: "assistant", Status: "completed", Content: []ResponsesContentPart{{Type: "output_text", Text: block.Text}}})
 				continue
 			}
@@ -313,7 +313,7 @@ func ResponsesEventToSSE(evt ResponsesStreamEvent) (string, error) {
 func anthToResHandleMessageStart(evt *AnthropicStreamEvent, state *AnthropicEventToResponsesState) []ResponsesStreamEvent {
 	if evt.Message != nil {
 		state.ResponseID = evt.Message.ID
-		state.PreserveThinkingSignatures = state.PreserveThinkingSignatures || claude.IsOpus55(evt.Message.Model)
+		state.PreserveThinkingSignatures = state.PreserveThinkingSignatures || claude.IsOpus55(evt.Message.Model) || claude.IsSonnet55(evt.Message.Model)
 		if state.Model == "" {
 			state.Model = evt.Message.Model
 		}
@@ -537,7 +537,9 @@ func anthToResHandleContentBlockStop(evt *AnthropicStreamEvent, state *Anthropic
 
 		// Emit function_call_arguments.done + output item done. Codex needs the
 		// full arguments on both terminal events to deserialize and execute the
-		// call, so carry the accumulated buffer (defaulting to "{}").
+		// call, and clients reconcile the done event against the accumulated
+		// function_call_arguments.delta payloads (inconsistent_tool_call when
+		// they disagree), so carry the accumulated buffer (defaulting to "{}").
 		events = append(events, makeResponsesEvent(state, "response.function_call_arguments.done", &ResponsesStreamEvent{
 			OutputIndex: state.OutputIndex,
 			ItemID:      state.CurrentItemID,

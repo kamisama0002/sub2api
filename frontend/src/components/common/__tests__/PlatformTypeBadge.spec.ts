@@ -36,7 +36,7 @@ describe('PlatformTypeBadge', () => {
     })
 
     expect(wrapper.get('[data-testid="platform-telemetry-badge"]').text()).toBe('Telemetry')
-    expect(wrapper.text()).toContain('Pro 20x')
+    expect(wrapper.text()).toContain('Pro 200')
     expect(wrapper.text()).not.toMatch(/抗降智/)
   })
 
