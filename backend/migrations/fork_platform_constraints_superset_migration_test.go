@@ -23,7 +23,11 @@ func TestForkPlatformConstraintsSupersetMigration(t *testing.T) {
 	require.Contains(t, sql,
 		"ADD CONSTRAINT channel_monitor_request_templates_provider_check CHECK (provider IN ('openai', 'anthropic', 'gemini', 'grok', 'antigravity', 'kiro', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go'))")
 
-	// 必须是最后一个重建平台约束的迁移，否则乱序补跑的旧迁移会在它之后再次收窄约束。
+	// 必须是最后一个重建渠道监控 provider 约束的迁移，否则乱序补跑的旧迁移会在它之后再次收窄约束。
+	// user_platform_quotas / composite_model_routes 约束的终态由 241_add_typesafe_platform.sql
+	// 收敛（含 typesafe），其全集覆盖由 TestUserPlatformQuotaPlatformCheckFinalStateCoversAllPlatforms
+	// 与 TestCompositeRouteTargetPlatformFinalStateCoversAllPlatforms 校验；此处只盯 239 独有的
+	// channel_monitors 约束。
 	entries, err := FS.ReadDir(".")
 	require.NoError(t, err)
 	var touching []string
@@ -33,9 +37,7 @@ func TestForkPlatformConstraintsSupersetMigration(t *testing.T) {
 		}
 		body, err := FS.ReadFile(e.Name())
 		require.NoError(t, err)
-		if strings.Contains(string(body), "ADD CONSTRAINT user_platform_quotas_platform_check") ||
-			strings.Contains(string(body), "ADD CONSTRAINT composite_model_routes_target_platform_check") ||
-			strings.Contains(string(body), "ADD CONSTRAINT channel_monitors_provider_check") {
+		if strings.Contains(string(body), "ADD CONSTRAINT channel_monitors_provider_check") {
 			touching = append(touching, e.Name())
 		}
 	}

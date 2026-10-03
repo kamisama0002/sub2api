@@ -4169,6 +4169,7 @@ const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'kiro') return ''
   if (props.account?.platform === 'adobe') return ''
   if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
+  if (props.account?.platform === 'typesafe') return 'https://api.typesafe.ai'
   // CN 供应商：按当前模式/协议回落到官方预设（清空输入框提交时使用），
   // 不能落到 anthropic 默认值（会被当 CC base 拼出错误端点）。
   if (
@@ -4633,6 +4634,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
             ? ''
           : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
+            : newAccount.platform === 'typesafe'
+              ? 'https://api.typesafe.ai'
             : newAccount.platform === 'kimi' ||
                 newAccount.platform === 'zhipu' ||
                 newAccount.platform === 'deepseek' ||
